@@ -102,6 +102,27 @@ export function render(
     ctx.fillRect(sx, sy, barW * pct, barH);
   }
 
+  // Draw dog companion (if alive and visible)
+  const { dog } = state;
+  if (dog && dog.alive) {
+    const dtx = Math.floor((dog.x + dog.width / 2) / TILE_SIZE);
+    const dty = Math.floor((dog.y + dog.height / 2) / TILE_SIZE);
+    if (dtx >= 0 && dty >= 0 && dty < tiles.length && dtx < tiles[0]!.length && tiles[dty]![dtx]!.visible) {
+      drawEntity(ctx, dog, cam);
+
+      // Health bar above dog
+      const dsx = dog.x - cam.x;
+      const dsy = dog.y - cam.y - 6;
+      const dBarW = dog.width;
+      const dBarH = 3;
+      const dPct = dog.health / dog.maxHealth;
+      ctx.fillStyle = PAL.healthBarBg;
+      ctx.fillRect(dsx, dsy, dBarW, dBarH);
+      ctx.fillStyle = dPct > 0.5 ? PAL.healthBar : PAL.damageText;
+      ctx.fillRect(dsx, dsy, dBarW * dPct, dBarH);
+    }
+  }
+
   // Draw player
   if (player.alive) {
     drawEntity(ctx, player, cam);

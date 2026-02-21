@@ -2,10 +2,11 @@ import { GameState, Entity, TileMap, KNOCKBACK_DECAY } from './types';
 import { ENTITY_OVERLAP_TOLERANCE } from './config';
 import { updatePlayer, canMoveTo } from './player';
 import { updateEnemies } from './enemy';
+import { updateDog } from './companion';
 import { computeFlowField } from './pathfinding';
 
 export function updateEntities(state: GameState, dt: number): void {
-  const { player, enemies, dungeon } = state;
+  const { player, dog, enemies, dungeon } = state;
 
   updatePlayer(player, dungeon.tiles, dt);
 
@@ -26,8 +27,14 @@ export function updateEntities(state: GameState, dt: number): void {
     dt,
   );
 
+  // Update dog companion
+  if (dog && dog.alive) {
+    updateDog(dog, player, enemies, dungeon.tiles, state, dt);
+  }
+
   // Apply knockback to all entities
   const allEntities: Entity[] = [player, ...enemies];
+  if (dog && dog.alive) allEntities.push(dog);
   for (const e of allEntities) {
     if (!e.alive) continue;
 

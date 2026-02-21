@@ -1,4 +1,5 @@
 import {
+  Entity,
   EnemyDef,
   EnemyEntity,
   DamageType,
@@ -188,8 +189,8 @@ function moveAlongFlow(
 // Corner-assist movement: when blocked on one axis, detect which corner of
 // the bounding box is clipping a wall and nudge perpendicular to clear it.
 // This prevents enemies from getting stuck at L-shaped corridor corners.
-function moveWithCornerAssist(
-  entity: EnemyEntity,
+export function moveWithCornerAssist(
+  entity: Entity,
   vx: number,
   vy: number,
   speed: number,
@@ -264,8 +265,8 @@ function moveWithCornerAssist(
 
 // Direct movement toward a target (for close-range chase and patrol).
 // Uses diagonal movement — only used in open spaces where clipping isn't an issue.
-function moveToward(
-  entity: EnemyEntity,
+export function moveToward(
+  entity: Entity,
   targetX: number,
   targetY: number,
   speed: number,

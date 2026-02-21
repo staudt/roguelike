@@ -33,6 +33,26 @@ export function renderHUD(ctx: CanvasRenderingContext2D, state: GameState, w: nu
   ctx.textAlign = 'left';
   ctx.fillText(`HP: ${Math.max(0, player.health)}/${player.maxHealth}`, hx + 4, hy + 14);
 
+  // ── Dog health bar (below player health) ──
+  if (state.dog && state.dog.alive) {
+    const dy = hy + barH + 8;
+
+    ctx.fillStyle = PAL.hudBg;
+    ctx.fillRect(hx - 4, dy - 4, barW + 8, barH + 24);
+
+    ctx.fillStyle = PAL.healthBarBg;
+    ctx.fillRect(hx, dy, barW, barH);
+
+    const dogPct = Math.max(0, state.dog.health / state.dog.maxHealth);
+    ctx.fillStyle = dogPct > 0.3 ? PAL.dog : PAL.damageText;
+    ctx.fillRect(hx, dy, barW * dogPct, barH);
+
+    ctx.fillStyle = PAL.hudTextBright;
+    ctx.font = '13px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText(`DOG: ${Math.max(0, state.dog.health)}/${state.dog.maxHealth}`, hx + 4, dy + 14);
+  }
+
   // ── Weapon info (bottom-left) ──
   const wx = 16;
   const wy = h - 60;

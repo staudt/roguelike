@@ -8,6 +8,7 @@ import {
 } from './types';
 import { generateDungeon } from './dungeon';
 import { spawnEnemies } from './enemy';
+import { createDog } from './companion';
 import { PAL } from './palette';
 import { PLAYER_WEIGHT } from './config';
 
@@ -58,16 +59,21 @@ export function createGameState(): GameState {
   const spawnY = (start.y + Math.floor(start.h / 2)) * TILE_SIZE + TILE_SIZE / 2 - 12;
 
   const player = createPlayer(spawnX, spawnY);
+  const dog = createDog(spawnX, spawnY);
   const enemies = spawnEnemies(dungeon, player.id);
 
   return {
     dungeon,
     player,
+    dog,
     enemies,
     attacks: [],
     floatingTexts: [],
     weapon: createStartWeapon(),
-    messages: [{ text: 'You descend into the dungeon...', timer: 4000 }],
+    messages: [
+      { text: 'The stone steps crumble beneath your feet as you descend into darkness...', timer: 5000 },
+      { text: 'Your dog follows close behind, nose to the cold stone.', timer: 6000 },
+    ],
     floor: 1,
     gameOver: false,
   };

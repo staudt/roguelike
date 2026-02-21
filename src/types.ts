@@ -105,6 +105,20 @@ export interface EnemyEntity extends Entity {
   patrolTarget: { x: number; y: number } | null;
 }
 
+// ── Companion ────────────────────────────────────────────
+
+export type DogAIState = 'follow' | 'attack' | 'explore' | 'flee';
+
+export interface CompanionEntity extends Entity {
+  aiState: DogAIState;
+  targetEnemyId: number | null;
+  attackCooldown: number;
+  exploreTarget: { x: number; y: number } | null;
+  returnTimer: number;
+  lastHitTimer: number;
+  regenAccum: number;
+}
+
 // ── Dungeon Generation ────────────────────────────────────
 
 export interface Rect {
@@ -138,6 +152,7 @@ export interface DungeonResult {
 export interface GameState {
   dungeon: DungeonResult;
   player: Entity;
+  dog: CompanionEntity | null;
   enemies: EnemyEntity[];
   attacks: Attack[];
   floatingTexts: FloatingText[];

@@ -14,6 +14,7 @@ export const PAL = {
 
   // Entities
   player: '#3ddc84',
+  dog: '#c4854c',
   zombie: '#cc3333',
   skeleton: '#e8a040',
 

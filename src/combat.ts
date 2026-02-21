@@ -13,6 +13,7 @@ import {
   KNOCKBACK_SLASH,
   KNOCKBACK_THRUST,
   KNOCKBACK_CONTACT,
+  DOG_REGEN_DELAY,
 } from './config';
 
 // ── Narrative message templates ──
@@ -64,6 +65,42 @@ function narrativePlayerHit(enemy: string): string {
   ]);
 }
 
+function narrativeDogBite(enemy: string): string {
+  return pick([
+    `Your dog lunges at the ${enemy}, jaws snapping!`,
+    `A flash of teeth — your dog sinks a bite into the ${enemy}!`,
+    `Your dog growls and clamps down on the ${enemy}!`,
+    `With a snarl, your dog tears at the ${enemy}!`,
+  ]);
+}
+
+function narrativeDogKill(enemy: string): string {
+  return pick([
+    `Your dog shakes the ${enemy} one last time — it goes still.`,
+    `The ${enemy} crumples under your dog's relentless assault.`,
+    `Your dog stands over the fallen ${enemy}, panting.`,
+    `A final bite and the ${enemy} moves no more. Your dog looks up at you.`,
+  ]);
+}
+
+function narrativeDogHit(enemy: string): string {
+  return pick([
+    `The ${enemy} strikes your dog — a pained yelp echoes through the chamber!`,
+    `Your dog whimpers as the ${enemy}'s blow connects!`,
+    `The ${enemy} catches your dog with a vicious strike!`,
+    `A sharp cry — the ${enemy} has wounded your dog!`,
+  ]);
+}
+
+function narrativeDogDeath(): string {
+  return pick([
+    `Your faithful companion falls... and does not rise again.`,
+    `Your dog collapses with a final whimper. The silence that follows is deafening.`,
+    `The dungeon claims another soul. Your dog lies still, eyes glazing over.`,
+    `A mournful howl fades into the darkness. You are alone now.`,
+  ]);
+}
+
 const KNOCKBACK_TYPE_MULT: Record<DamageType, number> = {
   [DamageType.BLUNT]: KNOCKBACK_BLUNT,
   [DamageType.SLASH]: KNOCKBACK_SLASH,
@@ -77,7 +114,7 @@ export function resetCombatState(): void {
 }
 
 export function updateCombat(state: GameState, dt: number): void {
-  const { player, weapon, attacks, enemies } = state;
+  const { player, dog, weapon, attacks, enemies } = state;
 
   // Decrease cooldown
   attackCooldown = Math.max(0, attackCooldown - dt * 1000);
@@ -118,15 +155,24 @@ export function updateCombat(state: GameState, dt: number): void {
 
           const superEffective = mult >= 2.0;
           const resisted = mult <= 0.5;
-          const tag = superEffective ? ' (SUPER EFFECTIVE!)' : resisted ? ' (resisted)' : '';
-          state.messages.push({
-            text: `Hit ${enemy.def.name} for ${dmg} damage${tag}`,
-            timer: 3000,
-          });
+          const isDogAttack = dog && atk.sourceId === dog.id;
 
-          // Knockback
-          const kbDx = (enemy.x + enemy.width / 2) - (player.x + player.width / 2);
-          const kbDy = (enemy.y + enemy.height / 2) - (player.y + player.height / 2);
+          if (isDogAttack) {
+            state.messages.push({
+              text: narrativeDogBite(enemy.def.name),
+              timer: 4000,
+            });
+          } else {
+            state.messages.push({
+              text: narrativeHit(enemy.def.name, superEffective, resisted),
+              timer: 4000,
+            });
+          }
+
+          // Knockback away from attack source (player or dog)
+          const source = isDogAttack ? dog : player;
+          const kbDx = (enemy.x + enemy.width / 2) - (source.x + source.width / 2);
+          const kbDy = (enemy.y + enemy.height / 2) - (source.y + source.height / 2);
           const kbDist = Math.sqrt(kbDx * kbDx + kbDy * kbDy) || 1;
           const force = dmg * KNOCKBACK_TYPE_MULT[atk.damageType] / enemy.weight * KNOCKBACK_SPEED;
           enemy.knockbackVx = (kbDx / kbDist) * force;
@@ -145,8 +191,8 @@ export function updateCombat(state: GameState, dt: number): void {
           if (enemy.health <= 0) {
             enemy.alive = false;
             state.messages.push({
-              text: `${enemy.def.name} destroyed!`,
-              timer: 3000,
+              text: isDogAttack ? narrativeDogKill(enemy.def.name) : narrativeKill(enemy.def.name),
+              timer: 5000,
             });
           }
 
@@ -174,8 +220,8 @@ export function updateCombat(state: GameState, dt: number): void {
       player.knockbackVy = (cDy / cDist) * cForce;
 
       state.messages.push({
-        text: `${enemy.def.name} hits you for ${enemy.def.damage} damage!`,
-        timer: 3000,
+        text: narrativePlayerHit(enemy.def.name),
+        timer: 4000,
       });
 
       // Floating damage on player
@@ -192,7 +238,50 @@ export function updateCombat(state: GameState, dt: number): void {
         player.health = 0;
         player.alive = false;
         state.gameOver = true;
-        state.messages.push({ text: 'You have died. Game over.', timer: 10000 });
+        state.messages.push({ text: 'Darkness closes in... your tale ends here.', timer: 10000 });
+      }
+    }
+  }
+
+  // Enemy contact damage against dog
+  if (dog && dog.alive) {
+    for (const enemy of enemies) {
+      if (!enemy.alive) continue;
+
+      if (enemy.contactTimer <= 0 && rectsOverlap(dog, enemy)) {
+        dog.health -= enemy.def.damage;
+        dog.lastHitTimer = DOG_REGEN_DELAY;
+        dog.regenAccum = 0;
+        enemy.contactTimer = enemy.def.contactCooldown;
+
+        // Knockback dog away from enemy
+        const cDx = (dog.x + dog.width / 2) - (enemy.x + enemy.width / 2);
+        const cDy = (dog.y + dog.height / 2) - (enemy.y + enemy.height / 2);
+        const cDist = Math.sqrt(cDx * cDx + cDy * cDy) || 1;
+        const cForce = enemy.def.damage * KNOCKBACK_CONTACT / dog.weight * KNOCKBACK_SPEED;
+        dog.knockbackVx = (cDx / cDist) * cForce;
+        dog.knockbackVy = (cDy / cDist) * cForce;
+
+        state.messages.push({
+          text: narrativeDogHit(enemy.def.name),
+          timer: 4000,
+        });
+
+        state.floatingTexts.push({
+          x: dog.x + dog.width / 2,
+          y: dog.y,
+          text: `-${enemy.def.damage}`,
+          color: '#c4854c',
+          timer: 800,
+          maxTimer: 800,
+        });
+
+        if (dog.health <= 0) {
+          dog.health = 0;
+          dog.alive = false;
+          state.dog = null;
+          state.messages.push({ text: narrativeDogDeath(), timer: 8000 });
+        }
       }
     }
   }
