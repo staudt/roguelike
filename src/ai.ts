@@ -184,11 +184,31 @@ AI_LAYERS.sort((a, b) => b.priority - a.priority);
 // Filters to layers this monster has and runs them in priority order.
 
 export function runAI(ctx: AIContext): void {
-  const tags = ctx.entity.def.tags;
+  const e = ctx.entity;
+
+  // Peaceful monsters just wander — never chase or attack the player
+  if (!e.hostile) {
+    peacefulWander(ctx);
+    return;
+  }
+
+  const tags = e.def.tags;
 
   for (const layer of AI_LAYERS) {
     if (!hasTag(tags, layer.tag)) continue;
     if (layer.update(ctx)) return;
   }
   // fallback: idle (no movement)
+}
+
+// Gentle wander for peaceful creatures — similar to patrol but never switches to chase
+function peacefulWander(ctx: AIContext): void {
+  const e = ctx.entity;
+  if (!e.patrolTarget || Math.random() < 0.01) {
+    e.patrolTarget = {
+      x: e.x + (Math.random() - 0.5) * 3 * TILE_SIZE,
+      y: e.y + (Math.random() - 0.5) * 3 * TILE_SIZE,
+    };
+  }
+  moveToward(e, e.patrolTarget.x, e.patrolTarget.y, e.def.speed * 0.4, ctx.tiles, ctx.dt);
 }

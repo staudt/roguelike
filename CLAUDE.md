@@ -47,7 +47,10 @@ npm run dev
 | `player.ts` | Player movement + wall collision |
 | `tags.ts` | Open-ended tag constants, presets, helpers (`hasTag()`) |
 | `monsters/defs.ts` | `MonsterDef` interface (tags + props bag) |
-| `monsters/undead.ts` | Undead monster definitions (zombie, skeleton) |
+| `monsters/undead.ts` | Undead monsters (zombie, skeleton, ghoul, wraith, mummy) |
+| `monsters/beasts.ts` | Beast monsters (grid bug, newt, jackal, rats, bats, wolf, spider, snakes) |
+| `monsters/humanoid.ts` | Humanoid monsters (kobolds, gnomes, orcs, dwarf, hobgoblin, bugbear) |
+| `monsters/special.ts` | Special monsters (floating eye, lichen, acid blob, yellow light) |
 | `monsters/index.ts` | Monster registry (`getMonsterDef()`, `getMonstersForFloor()`) |
 | `ai.ts` | Composable AI layer system (`runAI()`, chase/patrol/ambush/flee/berserker layers) |
 | `progression.ts` | Difficulty, XP, level thresholds, spawn eligibility, monster/pet leveling |
@@ -82,10 +85,11 @@ Monsters are defined as data in `src/monsters/` using an open-ended tag system. 
 - Tag constants live in `src/tags.ts` with presets like `HUMANOID_TAGS`, `UNDEAD_HUMANOID_TAGS`
 - Adding a new capability or behavior = adding one constant, never changing the interface
 
-| Type | HP | Speed | Weak to | Resistant to | AI Tags |
-|------|-----|-------|---------|-------------|---------|
-| Zombie | 30 | 60 | SLASH x2 | BLUNT x0.5 | `ai:chase` |
-| Skeleton | 10 | 100 | BLUNT x2 | SLASH x0.5 | `ai:patrol` |
+**Monster Categories** (31 total):
+- **Undead** (5): zombie, skeleton, ghoul, wraith, mummy — MINDLESS, ALWAYS_HOSTILE
+- **Beasts** (11): grid bug, newt, jackal, sewer rat, giant rat, bat, giant bat, wolf, cave spider, snake, pit viper — MINDLESS, always hostile
+- **Humanoids** (11): kobold, large kobold, gnome, gnome lord, orc, hill orc, Orc-captain, dwarf, hobgoblin, bugbear — SENTIENT, alignment-aware (lawful gnomes/dwarves peaceful to lawful players, chaotic orcs/kobolds peaceful to chaotic players)
+- **Special** (4): floating eye, lichen, acid blob, yellow light — MINDLESS/AMORPHOUS, always hostile
 
 ### Player Roles & Attributes
 - **Role selection** at game start: Warrior (STR 16, high HP, d10 HP/level), Ranger (DEX 15, companion dog, d6 HP/level), Brute (STR 18, slow but devastating, d12 HP/level)
@@ -100,7 +104,7 @@ Monsters are defined as data in `src/monsters/` using an open-ended tag system. 
 - **Player leveling**: NetHack doubling XP curve (20, 40, 80, 160...). HP per level = random roll (1 to hpDie from role) + CON bonus (minimum 1). Full heal on level-up
 - **Monster/pet leveling**: Monsters and the dog level up by killing. HP grows, species stats (damage, speed) stay fixed. Dog XP = `5 + difficulty * 3` per kill
 - **Spawn eligibility**: NetHack-style formula — `difficulty ≤ floor + playerLevel/2 + 3`, `difficulty ≥ floor / 6`. Floor dominates, player level is secondary. Rarity-weighted selection (common 4x, uncommon 2x, rare 1x)
-- **Alignment tags** (future): `ALIGN_LAWFUL/NEUTRAL/CHAOTIC`, `SENTIENT`, `DISPOSITION_*` — prepared in tags.ts for future alignment system
+- **Alignment system**: Sentient monsters with matching alignment to player spawn peaceful (cyan indicator). Attacking a peaceful creature makes it hostile. No XP for killing peacefuls. Roles define player alignment: Warrior=lawful, Ranger=neutral, Brute=chaotic
 - **Sound tags** (future): `CAN_HEAR`, `KEEN_HEARING`, `DEAF` — prepared in tags.ts. `WeaponDef.noiseRadius` set on all weapons
 
 ### Inventory & Equipment
@@ -128,9 +132,8 @@ Per-entity `AnimationState` stored on `Entity.anim`, updated every frame by `upd
 
 ## Next Steps
 - Pet evolution at level thresholds (puppy → dog → large dog)
-- Content scale-up (20-50+ monsters across categories, branch-themed)
 - Loot drops on the ground and item pickup
 - Weapon repair mechanic
 - Sound propagation system (local BFS + global floor-wide)
-- Alignment system (lawful/neutral/chaotic)
+- Alignment penalties (killing peacefuls shifts alignment toward chaotic)
 - Minimap

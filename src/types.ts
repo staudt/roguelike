@@ -94,6 +94,7 @@ export interface EnemyEntity extends Entity {
   aiState: string;
   patrolTarget: { x: number; y: number } | null;
   level: number;
+  hostile: boolean;
 }
 
 // ── Companion ────────────────────────────────────────────
@@ -163,6 +164,7 @@ export interface GameState {
   progress: DungeonProgress;
   player: Entity;
   playerRole: string;
+  playerAlignment: string;
   playerAttributes: Attributes;
   playerLastHitTimer: number;
   playerRegenAccum: number;

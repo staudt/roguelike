@@ -136,18 +136,26 @@ export function render(
     if (etx < 0 || ety < 0 || ety >= tiles.length || etx >= tiles[0]!.length) continue;
     if (!tiles[ety]![etx]!.visible) continue;
 
-    drawEntity(ctx, enemy, cam);
+    drawEntity(ctx, enemy, cam, !enemy.hostile);
 
-    // Health bar above enemy
     const sx = enemy.x - cam.x;
     const sy = enemy.y - cam.y - 6;
-    const barW = enemy.width;
-    const barH = 3;
-    const pct = enemy.health / enemy.maxHealth;
-    ctx.fillStyle = PAL.healthBarBg;
-    ctx.fillRect(sx, sy, barW, barH);
-    ctx.fillStyle = pct > 0.5 ? PAL.healthBar : PAL.damageText;
-    ctx.fillRect(sx, sy, barW * pct, barH);
+    if (enemy.hostile) {
+      // Health bar above hostile enemy
+      const barW = enemy.width;
+      const barH = 3;
+      const pct = enemy.health / enemy.maxHealth;
+      ctx.fillStyle = PAL.healthBarBg;
+      ctx.fillRect(sx, sy, barW, barH);
+      ctx.fillStyle = pct > 0.5 ? PAL.healthBar : PAL.damageText;
+      ctx.fillRect(sx, sy, barW * pct, barH);
+    } else {
+      // Peaceful indicator — small cyan dot above entity
+      ctx.fillStyle = PAL.peacefulIndicator;
+      ctx.beginPath();
+      ctx.arc(sx + enemy.width / 2, sy, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 
   // Draw dog companion (if alive and visible)
@@ -218,7 +226,7 @@ export function render(
   ctx.restore();
 }
 
-function drawEntity(ctx: CanvasRenderingContext2D, entity: Entity, cam: Camera): void {
+function drawEntity(ctx: CanvasRenderingContext2D, entity: Entity, cam: Camera, peaceful: boolean = false): void {
   const { anim } = entity;
   const sx = entity.x - cam.x;
   const sy = entity.y - cam.y;
@@ -255,9 +263,9 @@ function drawEntity(ctx: CanvasRenderingContext2D, entity: Entity, cam: Camera):
     ctx.fillRect(sx, sy, entity.width, entity.height);
   }
 
-  // Simple border for depth
-  ctx.strokeStyle = 'rgba(0,0,0,0.3)';
-  ctx.lineWidth = 1;
+  // Border — cyan for peaceful, dark for hostile
+  ctx.strokeStyle = peaceful ? PAL.peacefulIndicator : 'rgba(0,0,0,0.3)';
+  ctx.lineWidth = peaceful ? 1.5 : 1;
   ctx.strokeRect(sx + 0.5, sy + 0.5, entity.width - 1, entity.height - 1);
 
   // Eyes (two small dots)

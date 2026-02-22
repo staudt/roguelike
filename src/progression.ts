@@ -9,6 +9,11 @@ import {
   RARITY_UNCOMMON,
   RARITY_RARE,
   RARITY_UNIQUE,
+  SENTIENT,
+  ALWAYS_HOSTILE,
+  ALIGN_LAWFUL,
+  ALIGN_NEUTRAL,
+  ALIGN_CHAOTIC,
 } from './tags';
 
 // ── Monster Difficulty ──────────────────────────────────
@@ -219,4 +224,25 @@ export function pickWeightedMonster(eligible: MonsterDef[]): MonsterDef | null {
   }
 
   return weighted[weighted.length - 1]!.def;
+}
+
+// ── Alignment-Based Hostility ───────────────────────────
+// NetHack-style: sentient monsters with matching alignment spawn peaceful.
+
+function getMonsterAlignment(def: MonsterDef): string | null {
+  if (hasTag(def.tags, ALIGN_LAWFUL)) return ALIGN_LAWFUL;
+  if (hasTag(def.tags, ALIGN_NEUTRAL)) return ALIGN_NEUTRAL;
+  if (hasTag(def.tags, ALIGN_CHAOTIC)) return ALIGN_CHAOTIC;
+  return null;
+}
+
+export function isMonsterHostile(def: MonsterDef, playerAlignment: string): boolean {
+  // Always-hostile overrides everything
+  if (hasTag(def.tags, ALWAYS_HOSTILE)) return true;
+  // Non-sentient creatures are always hostile
+  if (!hasTag(def.tags, SENTIENT)) return true;
+  // Sentient: peaceful if alignment matches player
+  const monsterAlign = getMonsterAlignment(def);
+  if (monsterAlign && monsterAlign === playerAlignment) return false;
+  return true;
 }

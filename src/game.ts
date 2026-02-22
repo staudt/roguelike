@@ -67,7 +67,7 @@ export function createGameState(roleId: string = 'warrior'): GameState {
     inventory.items.push(createItemInstance(def.id, def.maxDurability));
   }
 
-  const enemies = spawnEnemies(dungeon, player.id, progress.floor, 1, progress.branch);
+  const enemies = spawnEnemies(dungeon, player.id, progress.floor, 1, progress.branch, role.alignment);
 
   const messages: { text: string; timer: number }[] = [
     { text: 'The stone steps crumble beneath your feet as you descend into darkness...', timer: 5000 },
@@ -81,6 +81,7 @@ export function createGameState(roleId: string = 'warrior'): GameState {
     progress,
     player,
     playerRole: role.id,
+    playerAlignment: role.alignment,
     playerAttributes: { ...role.baseAttributes },
     playerLastHitTimer: 0,
     playerRegenAccum: 0,
@@ -146,7 +147,7 @@ function loadOrGenerateFloor(state: GameState, spawnAtTile?: TileType): void {
     // Generate new floor
     const dungeon = generateFloor(state.progress.branch, state.progress.floor);
     state.dungeon = dungeon;
-    state.enemies = spawnEnemies(dungeon, state.player.id, state.progress.floor, state.playerLevel, state.progress.branch);
+    state.enemies = spawnEnemies(dungeon, state.player.id, state.progress.floor, state.playerLevel, state.progress.branch, state.playerAlignment);
     state.groundItems = [];
   }
 

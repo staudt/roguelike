@@ -12,12 +12,12 @@ import { canMoveTo } from './player';
 import { FlowField, getFlowTarget } from './pathfinding';
 import { isWalkable } from './dungeon';
 import { getMonstersForFloor } from './monsters/index';
-import { pickWeightedMonster } from './progression';
+import { pickWeightedMonster, isMonsterHostile } from './progression';
 import { hasTag, AI_CHASE } from './tags';
 import { runAI, AIContext } from './ai';
 import { createAnimationState } from './animation';
 
-export function spawnEnemies(dungeon: DungeonResult, _playerId: number, floor: number, playerLevel: number = 1, branch: string = 'main'): EnemyEntity[] {
+export function spawnEnemies(dungeon: DungeonResult, _playerId: number, floor: number, playerLevel: number = 1, branch: string = 'main', playerAlignment: string = 'align:neutral'): EnemyEntity[] {
   const enemies: EnemyEntity[] = [];
   const eligible = getMonstersForFloor(floor, branch, playerLevel);
 
@@ -59,6 +59,7 @@ export function spawnEnemies(dungeon: DungeonResult, _playerId: number, floor: n
         aiState: hasTag(def.tags, AI_CHASE) ? 'chase' : 'patrol',
         patrolTarget: null,
         level: 1,
+        hostile: isMonsterHostile(def, playerAlignment),
       });
     }
   }

@@ -12,11 +12,53 @@ export const PAL = {
   stairs: '#ffd700',
   fogOverlay: 'rgba(5, 5, 12, 0.7)',
 
-  // Entities
+  // Entities — Player & Companion
   player: '#3ddc84',
   dog: '#c4854c',
+
+  // Undead
   zombie: '#cc3333',
   skeleton: '#bbb4aa',
+  ghoul: '#66aa66',
+  wraith: '#6666aa',
+  mummy: '#ccaa66',
+
+  // Beasts
+  gridBug: '#88ee55',
+  newt: '#668844',
+  jackal: '#aa8866',
+  sewerRat: '#887766',
+  giantRat: '#996655',
+  bat: '#885544',
+  giantBat: '#774433',
+  wolf: '#998888',
+  caveSpider: '#884422',
+  snake: '#448844',
+  pitViper: '#336633',
+
+  // Kobolds
+  kobold: '#ee6644',
+  largeKobold: '#dd5533',
+
+  // Gnomes (lawful — blue-ish)
+  gnome: '#6688cc',
+  gnomeLord: '#5577bb',
+
+  // Orcs (chaotic — red-ish)
+  orc: '#cc5544',
+  hillOrc: '#bb3333',
+  orcCaptain: '#aa2222',
+
+  // Humanoids
+  dwarf: '#8899bb',
+  hobgoblin: '#cc7744',
+  bugbear: '#997744',
+
+  // Special
+  floatingEye: '#44ccff',
+  lichen: '#44aa44',
+  acidBlob: '#88ff44',
+  yellowLight: '#ffff44',
 
   // Combat
   slashAttack: '#ffee58',
@@ -40,4 +82,5 @@ export const PAL = {
   messageText: '#aaaacc',
   narrativeText: '#d4c8a8',
   damageText: '#ff5555',
+  peacefulIndicator: '#44ccdd',
 } as const;

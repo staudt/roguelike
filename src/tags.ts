@@ -65,6 +65,7 @@ export const DISPOSITION_FRIENDLY = 'disposition:friendly';
 // ── Sentience (only sentient monsters care about alignment/race) ──
 export const SENTIENT = 'sentient';
 export const MINDLESS = 'mindless';
+export const ALWAYS_HOSTILE = 'always_hostile'; // hostile regardless of alignment
 
 // ── Spawn Context ───────────────────────────────────────
 export const RARITY_COMMON = 'rarity:common';

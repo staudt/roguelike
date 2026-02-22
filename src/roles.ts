@@ -1,4 +1,5 @@
 import { Attributes } from './attributes';
+import { ALIGN_LAWFUL, ALIGN_NEUTRAL, ALIGN_CHAOTIC } from './tags';
 
 // ── Role Definition ────────────────────────────────────
 
@@ -14,6 +15,7 @@ export interface RoleDef {
   hpDie: number;           // max random HP per level (e.g., 10 = 1-10)
   startingWeapon: string;  // item def ID
   startingItems: string[]; // additional item def IDs
+  alignment: string;       // ALIGN_LAWFUL | ALIGN_NEUTRAL | ALIGN_CHAOTIC
   companion?: string;      // companion type (e.g., 'dog') — undefined = no companion
 }
 
@@ -32,6 +34,7 @@ export const ROLES: RoleDef[] = [
     hpDie: 10,
     startingWeapon: 'rusty_sword',
     startingItems: [],
+    alignment: ALIGN_LAWFUL,
   },
   {
     id: 'ranger',
@@ -45,6 +48,7 @@ export const ROLES: RoleDef[] = [
     hpDie: 6,
     startingWeapon: 'short_sword',
     startingItems: [],
+    alignment: ALIGN_NEUTRAL,
     companion: 'dog',
   },
   {
@@ -59,6 +63,7 @@ export const ROLES: RoleDef[] = [
     hpDie: 12,
     startingWeapon: 'wooden_club',
     startingItems: [],
+    alignment: ALIGN_CHAOTIC,
   },
 ];
 

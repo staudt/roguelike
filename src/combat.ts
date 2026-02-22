@@ -161,6 +161,12 @@ export function updateCombat(state: GameState, dt: number): void {
         if (atk.sourceId === enemy.id) continue;
 
         if (rectsOverlap(atk, enemy)) {
+          // Attacking a peaceful creature makes it hostile
+          const wasPeaceful = !enemy.hostile;
+          if (wasPeaceful) {
+            enemy.hostile = true;
+          }
+
           const mult = enemy.def.vulnerabilities[atk.damageType] ?? 1.0;
           const dmg = Math.round(atk.damage * mult);
           enemy.health -= dmg;
@@ -209,46 +215,54 @@ export function updateCombat(state: GameState, dt: number): void {
               timer: 5000,
             });
 
-            // Award XP (player always gets XP, even for dog kills)
-            const xpGain = computeXPReward(enemy.def.difficulty ?? 0);
-            state.playerXP += xpGain;
-
-            state.floatingTexts.push({
-              x: enemy.x + enemy.width / 2,
-              y: enemy.y - 12,
-              text: `+${xpGain} XP`,
-              color: '#ffdd44',
-              timer: 1200,
-              maxTimer: 1200,
-            });
-
-            // Check player level-up (CON-based HP, role-based hpDie)
-            const role = getRoleDef(state.playerRole);
-            const conBonus = getCONHPBonus(state.playerAttributes);
-            const levelUp = checkLevelUp(state.playerXP, state.playerLevel, role.hpDie, conBonus);
-            if (levelUp) {
-              state.playerLevel = levelUp.newLevel;
-              player.maxHealth += levelUp.hpGain;
-              player.health = player.maxHealth; // full heal on level-up
+            if (wasPeaceful) {
+              // No XP for killing peaceful creatures
               state.messages.push({
-                text: `You feel stronger! Level ${levelUp.newLevel}! (+${levelUp.hpGain} HP)`,
-                timer: 6000,
+                text: `You feel guilty about killing the peaceful ${enemy.def.name}.`,
+                timer: 5000,
               });
-            }
+            } else {
+              // Award XP (player always gets XP, even for dog kills)
+              const xpGain = computeXPReward(enemy.def.difficulty ?? 0);
+              state.playerXP += xpGain;
 
-            // Dog XP and leveling (dog gains XP from its own kills)
-            if (isDogAttack && dog) {
-              const dogXP = monsterXPForKill(enemy.def.difficulty ?? 0);
-              dog.xp += dogXP;
-              const dogLevelUp = checkMonsterLevelUp(dog.xp, dog.level, 3);
-              if (dogLevelUp) {
-                dog.level = dogLevelUp.newLevel;
-                dog.maxHealth += dogLevelUp.hpGain;
-                dog.health = Math.min(dog.health + dogLevelUp.hpGain, dog.maxHealth);
+              state.floatingTexts.push({
+                x: enemy.x + enemy.width / 2,
+                y: enemy.y - 12,
+                text: `+${xpGain} XP`,
+                color: '#ffdd44',
+                timer: 1200,
+                maxTimer: 1200,
+              });
+
+              // Check player level-up (CON-based HP, role-based hpDie)
+              const role = getRoleDef(state.playerRole);
+              const conBonus = getCONHPBonus(state.playerAttributes);
+              const levelUp = checkLevelUp(state.playerXP, state.playerLevel, role.hpDie, conBonus);
+              if (levelUp) {
+                state.playerLevel = levelUp.newLevel;
+                player.maxHealth += levelUp.hpGain;
+                player.health = player.maxHealth; // full heal on level-up
                 state.messages.push({
-                  text: `Your dog grows stronger! Level ${dogLevelUp.newLevel}! (+${dogLevelUp.hpGain} HP)`,
-                  timer: 5000,
+                  text: `You feel stronger! Level ${levelUp.newLevel}! (+${levelUp.hpGain} HP)`,
+                  timer: 6000,
                 });
+              }
+
+              // Dog XP and leveling (dog gains XP from its own kills)
+              if (isDogAttack && dog) {
+                const dogXP = monsterXPForKill(enemy.def.difficulty ?? 0);
+                dog.xp += dogXP;
+                const dogLevelUp = checkMonsterLevelUp(dog.xp, dog.level, 3);
+                if (dogLevelUp) {
+                  dog.level = dogLevelUp.newLevel;
+                  dog.maxHealth += dogLevelUp.hpGain;
+                  dog.health = Math.min(dog.health + dogLevelUp.hpGain, dog.maxHealth);
+                  state.messages.push({
+                    text: `Your dog grows stronger! Level ${dogLevelUp.newLevel}! (+${dogLevelUp.hpGain} HP)`,
+                    timer: 5000,
+                  });
+                }
               }
             }
           }
@@ -259,9 +273,9 @@ export function updateCombat(state: GameState, dt: number): void {
     }
   }
 
-  // Enemy contact damage
+  // Enemy contact damage (hostile only)
   for (const enemy of enemies) {
-    if (!enemy.alive || !player.alive) continue;
+    if (!enemy.alive || !player.alive || !enemy.hostile) continue;
     enemy.contactTimer = Math.max(0, enemy.contactTimer - dt * 1000);
 
     if (enemy.contactTimer <= 0 && rectsOverlap(player, enemy)) {
@@ -303,10 +317,10 @@ export function updateCombat(state: GameState, dt: number): void {
     }
   }
 
-  // Enemy contact damage against dog
+  // Enemy contact damage against dog (hostile only)
   if (dog && dog.alive) {
     for (const enemy of enemies) {
-      if (!enemy.alive) continue;
+      if (!enemy.alive || !enemy.hostile) continue;
 
       if (enemy.contactTimer <= 0 && rectsOverlap(dog, enemy)) {
         dog.health -= enemy.def.damage;

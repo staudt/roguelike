@@ -1,10 +1,16 @@
 import { MonsterDef } from './defs';
 import { UNDEAD_MONSTERS } from './undead';
+import { BEAST_MONSTERS } from './beasts';
+import { HUMANOID_MONSTERS } from './humanoid';
+import { SPECIAL_MONSTERS } from './special';
 import { computeDifficulty, getEligibleMonsters } from '../progression';
 
 // ── All monster definitions ─────────────────────────────
 const ALL_MONSTERS: MonsterDef[] = [
   ...UNDEAD_MONSTERS,
+  ...BEAST_MONSTERS,
+  ...HUMANOID_MONSTERS,
+  ...SPECIAL_MONSTERS,
 ];
 
 // ── Registry (built at module load time) ────────────────
