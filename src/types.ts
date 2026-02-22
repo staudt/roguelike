@@ -176,7 +176,7 @@ export interface GameState {
   attacks: Attack[];
   floatingTexts: FloatingText[];
   groundItems: GroundItem[];
-  messages: { text: string; timer: number }[];
+  messages: { text: string; timer: number; narrate?: boolean }[];
   floor: number;
   gameOver: boolean;
   floorCache: Record<string, SavedFloor>;

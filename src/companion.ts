@@ -89,7 +89,7 @@ export function updateDog(
       const oldHealth = dog.health;
       dog.health = Math.min(dog.maxHealth, dog.health + DOG_REGEN_AMOUNT);
       if (oldHealth <= dog.maxHealth * DOG_FLEE_THRESHOLD && dog.health > dog.maxHealth * DOG_FLEE_THRESHOLD) {
-        state.messages.push({ text: 'Your dog steadies itself, wounds beginning to close.', timer: 4000 });
+        state.messages.push({ text: 'Your dog steadies itself, wounds beginning to close.', timer: 4000, narrate: true });
       }
     }
   }
@@ -99,7 +99,7 @@ export function updateDog(
   if (dog.aiState !== 'flee' && healthPct <= DOG_FLEE_THRESHOLD) {
     dog.aiState = 'flee';
     dog.targetEnemyId = null;
-    state.messages.push({ text: 'Your dog yelps and backs away, limping from its wounds!', timer: 4000 });
+    state.messages.push({ text: 'Your dog yelps and backs away, limping from its wounds!', timer: 4000, narrate: true });
   }
 
   const dogCX = dog.x + dog.width / 2;
@@ -263,7 +263,7 @@ function updateFlee(
   const healthPct = dog.health / dog.maxHealth;
   if (healthPct >= DOG_FLEE_RECOVER) {
     dog.aiState = 'follow';
-    state.messages.push({ text: 'Your dog perks up, ready to fight again.', timer: 4000 });
+    state.messages.push({ text: 'Your dog perks up, ready to fight again.', timer: 4000, narrate: true });
     return;
   }
 

@@ -9,6 +9,7 @@ import { renderHUD, updateMessages } from './hud';
 import { ROLES } from './roles';
 import { PAL } from './palette';
 import { GameState, TileType, TILE_SIZE } from './types';
+import { initNarrator, narrate, cancelNarration } from './narrator';
 
 // ── Canvas setup ──
 const canvas = document.getElementById('game') as HTMLCanvasElement;
@@ -16,6 +17,7 @@ const ctx = canvas.getContext('2d')!;
 
 // ── Init ──
 initInput();
+initNarrator();
 
 let cam = createCamera(window.innerWidth, window.innerHeight);
 
@@ -119,6 +121,7 @@ function updateRoleSelect(): void {
 }
 
 function startGame(roleId: string): void {
+  cancelNarration();
   resetCombatState();
   state = createGameState(roleId);
   cam = createCamera(window.innerWidth, window.innerHeight);
@@ -151,6 +154,7 @@ function gameLoop(now: number): void {
 
   // Restart → back to role select
   if (state.gameOver && isKeyPressed('r')) {
+    cancelNarration();
     mode = 'role_select';
     state = null;
     requestAnimationFrame(gameLoop);
@@ -198,6 +202,14 @@ function gameLoop(now: number): void {
     updateCombat(state, dt);
     computeFOV(state.dungeon.tiles, state.player);
     updateCamera(cam, state.player, state.dungeon.width, state.dungeon.height, dt);
+  }
+
+  // Speak narrate-flagged messages before they expire
+  for (const msg of state.messages) {
+    if (msg.narrate) {
+      narrate(msg.text);
+      msg.narrate = false;
+    }
   }
 
   updateMessages(state, dt);

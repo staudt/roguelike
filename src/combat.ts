@@ -213,6 +213,7 @@ export function updateCombat(state: GameState, dt: number): void {
             state.messages.push({
               text: isDogAttack ? narrativeDogKill(enemy.def.name) : narrativeKill(enemy.def.name),
               timer: 5000,
+              narrate: true,
             });
 
             if (wasPeaceful) {
@@ -220,6 +221,7 @@ export function updateCombat(state: GameState, dt: number): void {
               state.messages.push({
                 text: `You feel guilty about killing the peaceful ${enemy.def.name}.`,
                 timer: 5000,
+                narrate: true,
               });
             } else {
               // Award XP (player always gets XP, even for dog kills)
@@ -246,6 +248,7 @@ export function updateCombat(state: GameState, dt: number): void {
                 state.messages.push({
                   text: `You feel stronger! Level ${levelUp.newLevel}! (+${levelUp.hpGain} HP)`,
                   timer: 6000,
+                  narrate: true,
                 });
               }
 
@@ -261,6 +264,7 @@ export function updateCombat(state: GameState, dt: number): void {
                   state.messages.push({
                     text: `Your dog grows stronger! Level ${dogLevelUp.newLevel}! (+${dogLevelUp.hpGain} HP)`,
                     timer: 5000,
+                    narrate: true,
                   });
                 }
               }
@@ -312,7 +316,7 @@ export function updateCombat(state: GameState, dt: number): void {
         player.health = 0;
         player.alive = false;
         state.gameOver = true;
-        state.messages.push({ text: 'Darkness closes in... your tale ends here.', timer: 10000 });
+        state.messages.push({ text: 'Darkness closes in... your tale ends here.', timer: 10000, narrate: true });
       }
     }
   }
@@ -340,6 +344,7 @@ export function updateCombat(state: GameState, dt: number): void {
         state.messages.push({
           text: narrativeDogHit(enemy.def.name),
           timer: 4000,
+          narrate: true,
         });
 
         state.floatingTexts.push({
@@ -355,7 +360,7 @@ export function updateCombat(state: GameState, dt: number): void {
           dog.health = 0;
           dog.alive = false;
           state.dog = null;
-          state.messages.push({ text: narrativeDogDeath(), timer: 8000 });
+          state.messages.push({ text: narrativeDogDeath(), timer: 8000, narrate: true });
         }
       }
     }

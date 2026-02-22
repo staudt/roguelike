@@ -69,11 +69,11 @@ export function createGameState(roleId: string = 'warrior'): GameState {
 
   const enemies = spawnEnemies(dungeon, player.id, progress.floor, 1, progress.branch, role.alignment);
 
-  const messages: { text: string; timer: number }[] = [
-    { text: 'The stone steps crumble beneath your feet as you descend into darkness...', timer: 5000 },
+  const messages: { text: string; timer: number; narrate?: boolean }[] = [
+    { text: 'The stone steps crumble beneath your feet as you descend into darkness...', timer: 5000, narrate: true },
   ];
   if (dog) {
-    messages.push({ text: 'Your dog follows close behind, nose to the cold stone.', timer: 6000 });
+    messages.push({ text: 'Your dog follows close behind, nose to the cold stone.', timer: 6000, narrate: true });
   }
 
   return {
@@ -217,11 +217,13 @@ export function descendStairs(state: GameState, stairs: StairsPlacement): void {
     state.messages.push({
       text: `You descend into the ${branchName}...`,
       timer: 5000,
+      narrate: true,
     });
   } else {
     state.messages.push({
       text: `You descend to floor ${state.progress.floor}.`,
       timer: 4000,
+      narrate: true,
     });
   }
 }
@@ -239,6 +241,7 @@ export function ascendStairs(state: GameState): void {
       state.messages.push({
         text: 'The entrance has collapsed behind you. There is no going back.',
         timer: 4000,
+        narrate: true,
       });
       return;
     }
@@ -252,5 +255,6 @@ export function ascendStairs(state: GameState): void {
   state.messages.push({
     text: `You ascend to floor ${state.progress.floor}.`,
     timer: 4000,
+    narrate: true,
   });
 }
