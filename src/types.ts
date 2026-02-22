@@ -102,6 +102,7 @@ export interface EnemyEntity extends Entity {
 export type DogAIState = 'follow' | 'attack' | 'explore' | 'flee';
 
 export interface CompanionEntity extends Entity {
+  form: string;                // current evolution form ID ('little_dog', 'dog', 'large_dog')
   aiState: DogAIState;
   targetEnemyId: number | null;
   attackCooldown: number;
@@ -111,6 +112,10 @@ export interface CompanionEntity extends Entity {
   regenAccum: number;
   level: number;
   xp: number;
+  // Per-form combat stats (updated on evolution)
+  speed: number;
+  biteDamage: number;
+  biteCooldown: number;
 }
 
 // ── Dungeon Generation ────────────────────────────────────

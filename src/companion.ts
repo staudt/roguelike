@@ -10,16 +10,11 @@ import {
   TILE_SIZE,
 } from './types';
 import { getNextId } from './game';
-import { PAL } from './palette';
 import { moveToward } from './enemy';
 import { createAnimationState, triggerWeaponSwing } from './animation';
 import {
-  DOG_SPEED,
-  DOG_HEALTH,
-  DOG_WEIGHT,
-  DOG_BITE_DAMAGE,
+  getDogForm,
   DOG_BITE_RANGE,
-  DOG_BITE_COOLDOWN,
   DOG_BITE_ATK_DURATION,
   DOG_BITE_ATK_RANGE,
   DOG_FOLLOW_DISTANCE,
@@ -32,28 +27,44 @@ import {
   DOG_REGEN_INTERVAL,
   DOG_REGEN_AMOUNT,
 } from './config';
+import type { DogForm } from './config';
+
+// ── Helpers ──────────────────────────────────────────────
+
+const FORM_NAMES: Record<string, string> = {
+  little_dog: 'little dog',
+  dog: 'dog',
+  large_dog: 'large dog',
+};
+
+/** Get display name for a dog companion */
+export function getDogName(dog: CompanionEntity): string {
+  return FORM_NAMES[dog.form] ?? 'dog';
+}
 
 // ── Spawn ────────────────────────────────────────────────
 
 export function createDog(playerX: number, playerY: number): CompanionEntity {
+  const form = getDogForm(1);
   return {
     id: getNextId(),
     x: playerX + 30,
     y: playerY + 10,
-    width: 24,
-    height: 24,
+    width: form.size,
+    height: form.size,
     vx: 0,
     vy: 0,
     knockbackVx: 0,
     knockbackVy: 0,
-    weight: DOG_WEIGHT,
+    weight: form.weight,
     facing: Direction.SOUTH,
-    health: DOG_HEALTH,
-    maxHealth: DOG_HEALTH,
-    color: PAL.dog,
+    health: form.health,
+    maxHealth: form.health,
+    color: form.color,
     alive: true,
     hitTimer: 0,
     anim: createAnimationState(),
+    form: form.id,
     aiState: 'follow',
     targetEnemyId: null,
     attackCooldown: 0,
@@ -63,7 +74,28 @@ export function createDog(playerX: number, playerY: number): CompanionEntity {
     regenAccum: 0,
     level: 1,
     xp: 0,
+    speed: form.speed,
+    biteDamage: form.biteDamage,
+    biteCooldown: form.biteCooldown,
   };
+}
+
+// ── Evolution ────────────────────────────────────────────
+
+/** Evolve the dog to a new form. Returns the new form's display name. */
+export function evolveDog(dog: CompanionEntity, newForm: DogForm): string {
+  dog.form = newForm.id;
+  dog.color = newForm.color;
+  dog.width = newForm.size;
+  dog.height = newForm.size;
+  dog.weight = newForm.weight;
+  dog.speed = newForm.speed;
+  dog.biteDamage = newForm.biteDamage;
+  dog.biteCooldown = newForm.biteCooldown;
+  // Upgrade max HP to new form's base, heal to full
+  dog.maxHealth = Math.max(dog.maxHealth, newForm.health);
+  dog.health = dog.maxHealth;
+  return newForm.name;
 }
 
 // ── AI Update ────────────────────────────────────────────
@@ -89,7 +121,8 @@ export function updateDog(
       const oldHealth = dog.health;
       dog.health = Math.min(dog.maxHealth, dog.health + DOG_REGEN_AMOUNT);
       if (oldHealth <= dog.maxHealth * DOG_FLEE_THRESHOLD && dog.health > dog.maxHealth * DOG_FLEE_THRESHOLD) {
-        state.messages.push({ text: 'Your dog steadies itself, wounds beginning to close.', timer: 4000 });
+        const name = getDogName(dog);
+        state.messages.push({ text: `Your ${name} steadies itself, wounds beginning to close.`, timer: 4000 });
       }
     }
   }
@@ -99,7 +132,8 @@ export function updateDog(
   if (dog.aiState !== 'flee' && healthPct <= DOG_FLEE_THRESHOLD) {
     dog.aiState = 'flee';
     dog.targetEnemyId = null;
-    state.messages.push({ text: 'Your dog yelps and backs away, limping from its wounds!', timer: 4000 });
+    const name = getDogName(dog);
+    state.messages.push({ text: `Your ${name} yelps and backs away, limping from its wounds!`, timer: 4000 });
   }
 
   const dogCX = dog.x + dog.width / 2;
@@ -146,7 +180,7 @@ function updateFollow(
 
   if (distToPlayer > followDist) {
     // Run back toward player
-    moveToward(dog, player.x + player.width / 2, player.y + player.height / 2, DOG_SPEED, tiles, dt);
+    moveToward(dog, player.x + player.width / 2, player.y + player.height / 2, dog.speed, tiles, dt);
   } else {
     // Gentle wander near player
     if (!dog.exploreTarget || Math.random() < 0.02) {
@@ -155,7 +189,7 @@ function updateFollow(
         y: player.y + (Math.random() - 0.5) * 2 * TILE_SIZE,
       };
     }
-    moveToward(dog, dog.exploreTarget.x, dog.exploreTarget.y, DOG_SPEED * 0.4, tiles, dt);
+    moveToward(dog, dog.exploreTarget.x, dog.exploreTarget.y, dog.speed * 0.4, tiles, dt);
 
     // Random explore chance
     if (Math.random() < DOG_EXPLORE_CHANCE) {
@@ -209,11 +243,11 @@ function updateAttack(
     // Create bite attack
     const attack = createBiteAttack(dog, target);
     state.attacks.push(attack);
-    dog.attackCooldown = DOG_BITE_COOLDOWN;
+    dog.attackCooldown = dog.biteCooldown;
     triggerWeaponSwing(dog.anim);
   } else {
     // Chase the enemy
-    moveToward(dog, targetCX, targetCY, DOG_SPEED, tiles, dt);
+    moveToward(dog, targetCX, targetCY, dog.speed, tiles, dt);
   }
 }
 
@@ -236,7 +270,7 @@ function updateExplore(
   }
 
   if (dog.exploreTarget) {
-    moveToward(dog, dog.exploreTarget.x, dog.exploreTarget.y, DOG_SPEED * 0.7, tiles, dt);
+    moveToward(dog, dog.exploreTarget.x, dog.exploreTarget.y, dog.speed * 0.7, tiles, dt);
 
     // If reached target, return
     const dx = dog.x - dog.exploreTarget.x;
@@ -263,7 +297,8 @@ function updateFlee(
   const healthPct = dog.health / dog.maxHealth;
   if (healthPct >= DOG_FLEE_RECOVER) {
     dog.aiState = 'follow';
-    state.messages.push({ text: 'Your dog perks up, ready to fight again.', timer: 4000 });
+    const name = getDogName(dog);
+    state.messages.push({ text: `Your ${name} perks up, ready to fight again.`, timer: 4000 });
     return;
   }
 
@@ -288,11 +323,11 @@ function updateFlee(
     const targetX = dogCX + (awayX / awayDist) * TILE_SIZE * 3 + (toPlayerX / toPlayerDist) * TILE_SIZE;
     const targetY = dogCY + (awayY / awayDist) * TILE_SIZE * 3 + (toPlayerY / toPlayerDist) * TILE_SIZE;
 
-    moveToward(dog, targetX, targetY, DOG_SPEED * 1.1, tiles, dt);
+    moveToward(dog, targetX, targetY, dog.speed * 1.1, tiles, dt);
   } else {
     // No enemies nearby — stay near player
     if (distToPlayer > DOG_FOLLOW_DISTANCE * TILE_SIZE) {
-      moveToward(dog, player.x + player.width / 2, player.y + player.height / 2, DOG_SPEED, tiles, dt);
+      moveToward(dog, player.x + player.width / 2, player.y + player.height / 2, dog.speed, tiles, dt);
     }
   }
 }
@@ -368,7 +403,7 @@ function createBiteAttack(dog: CompanionEntity, target: Entity): Attack {
     width: w,
     height: h,
     damageType: DamageType.BLUNT,
-    damage: DOG_BITE_DAMAGE,
+    damage: dog.biteDamage,
     sourceId: dog.id,
     timer: DOG_BITE_ATK_DURATION,
     hit: false,

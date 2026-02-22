@@ -103,6 +103,7 @@ Monsters are defined as data in `src/monsters/` using an open-ended tag system. 
 - **XP reward**: `1 + difficulty²` — quadratic scaling rewards harder monsters disproportionately
 - **Player leveling**: NetHack doubling XP curve (20, 40, 80, 160...). HP per level = random roll (1 to hpDie from role) + CON bonus (minimum 1). Full heal on level-up
 - **Monster/pet leveling**: Monsters and the dog level up by killing. HP grows, species stats (damage, speed) stay fixed. Dog XP = `5 + difficulty * 3` per kill
+- **Pet evolution**: Dog evolves at level thresholds — little dog (lvl 1, 30 HP, 5 dmg) → dog (lvl 3, 45 HP, 7 dmg) → large dog (lvl 7, 70 HP, 11 dmg). Evolution upgrades size, color, speed, and combat stats. Forms defined as data in `config.ts` (`DogForm`, `DOG_FORMS`)
 - **Spawn eligibility**: NetHack-style formula — `difficulty ≤ floor + playerLevel/2 + 3`, `difficulty ≥ floor / 6`. Floor dominates, player level is secondary. Rarity-weighted selection (common 4x, uncommon 2x, rare 1x)
 - **Alignment system**: Sentient monsters with matching alignment to player spawn peaceful (cyan indicator). Attacking a peaceful creature makes it hostile. No XP for killing peacefuls. Roles define player alignment: Warrior=lawful, Ranger=neutral, Brute=chaotic
 - **Sound tags** (future): `CAN_HEAR`, `KEEN_HEARING`, `DEAF` — prepared in tags.ts. `WeaponDef.noiseRadius` set on all weapons
@@ -131,7 +132,6 @@ Per-entity `AnimationState` stored on `Entity.anim`, updated every frame by `upd
 - **Iterative development** — build foundation, expand incrementally
 
 ## Next Steps
-- Pet evolution at level thresholds (puppy → dog → large dog)
 - Loot drops on the ground and item pickup
 - Weapon repair mechanic
 - Sound propagation system (local BFS + global floor-wide)

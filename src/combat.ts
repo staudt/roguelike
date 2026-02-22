@@ -21,6 +21,8 @@ import { getWeaponDef } from './items';
 import { getSTRDamageBonus, getDEXSpeedMult, getCONHPBonus } from './attributes';
 import { getRoleDef } from './roles';
 import { triggerHitFlash, triggerWeaponSwing } from './animation';
+import { getDogName, evolveDog } from './companion';
+import { getDogForm } from './config';
 
 // ── Narrative message templates ──
 
@@ -255,13 +257,24 @@ export function updateCombat(state: GameState, dt: number): void {
                 dog.xp += dogXP;
                 const dogLevelUp = checkMonsterLevelUp(dog.xp, dog.level, 3);
                 if (dogLevelUp) {
+                  const oldName = getDogName(dog);
                   dog.level = dogLevelUp.newLevel;
                   dog.maxHealth += dogLevelUp.hpGain;
                   dog.health = Math.min(dog.health + dogLevelUp.hpGain, dog.maxHealth);
                   state.messages.push({
-                    text: `Your dog grows stronger! Level ${dogLevelUp.newLevel}! (+${dogLevelUp.hpGain} HP)`,
+                    text: `Your ${oldName} grows stronger! Level ${dogLevelUp.newLevel}! (+${dogLevelUp.hpGain} HP)`,
                     timer: 5000,
                   });
+
+                  // Check for evolution
+                  const newForm = getDogForm(dog.level);
+                  if (newForm.id !== dog.form) {
+                    const evolvedName = evolveDog(dog, newForm);
+                    state.messages.push({
+                      text: `Your ${oldName} evolves into a ${evolvedName}!`,
+                      timer: 6000,
+                    });
+                  }
                 }
               }
             }

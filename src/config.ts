@@ -33,12 +33,71 @@ export const KNOCKBACK_CONTACT = 4.0; // multiplier for enemy contact knockback
 export const ENTITY_OVERLAP_TOLERANCE = 0.1; // fraction of overlap allowed (0.1 = 10%)
 
 // ── Dog Companion ──
-export const DOG_SPEED = 180;
-export const DOG_HEALTH = 40;
-export const DOG_WEIGHT = 0.8;
-export const DOG_BITE_DAMAGE = 7;
+
+export interface DogForm {
+  id: string;
+  name: string;         // display name: 'little dog', 'dog', 'large dog'
+  minLevel: number;     // level at which this form is reached
+  health: number;
+  speed: number;
+  weight: number;
+  biteDamage: number;
+  biteCooldown: number; // ms between bites
+  size: number;         // width and height in pixels
+  color: string;
+}
+
+export const DOG_FORMS: DogForm[] = [
+  {
+    id: 'little_dog',
+    name: 'little dog',
+    minLevel: 1,
+    health: 30,
+    speed: 170,
+    weight: 0.6,
+    biteDamage: 5,
+    biteCooldown: 900,
+    size: 20,
+    color: '#b8935a',
+  },
+  {
+    id: 'dog',
+    name: 'dog',
+    minLevel: 3,
+    health: 45,
+    speed: 180,
+    weight: 0.8,
+    biteDamage: 7,
+    biteCooldown: 800,
+    size: 24,
+    color: '#c4854c',
+  },
+  {
+    id: 'large_dog',
+    name: 'large dog',
+    minLevel: 7,
+    health: 70,
+    speed: 175,
+    weight: 1.0,
+    biteDamage: 11,
+    biteCooldown: 700,
+    size: 28,
+    color: '#a06830',
+  },
+];
+
+/** Get the appropriate dog form for a given level */
+export function getDogForm(level: number): DogForm {
+  // Walk backwards — pick the highest-tier form the dog qualifies for
+  for (let i = DOG_FORMS.length - 1; i >= 0; i--) {
+    const form = DOG_FORMS[i];
+    if (form && level >= form.minLevel) return form;
+  }
+  return DOG_FORMS[0]!;
+}
+
+// Shared constants (don't change with evolution)
 export const DOG_BITE_RANGE = 1.5;        // tiles — distance to initiate bite
-export const DOG_BITE_COOLDOWN = 800;     // ms between bites
 export const DOG_BITE_ATK_DURATION = 150; // ms — attack hitbox lifespan
 export const DOG_BITE_ATK_RANGE = 28;    // pixels — hitbox length
 export const DOG_FOLLOW_DISTANCE = 3;    // tiles — how far before dog runs back
