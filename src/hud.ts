@@ -1,5 +1,7 @@
 import { GameState, DamageType } from './types';
 import { PAL } from './palette';
+import { getXPForLevel, getXPForNextLevel } from './progression';
+import { getWeaponDef } from './items';
 
 const DAMAGE_TYPE_NAMES: Record<DamageType, string> = {
   [DamageType.SLASH]: 'SLASH',
@@ -8,7 +10,7 @@ const DAMAGE_TYPE_NAMES: Record<DamageType, string> = {
 };
 
 export function renderHUD(ctx: CanvasRenderingContext2D, state: GameState, w: number, h: number): void {
-  const { player, weapon, messages, floor, gameOver } = state;
+  const { player, inventory, messages, floor, gameOver } = state;
 
   ctx.save();
 
@@ -50,40 +52,94 @@ export function renderHUD(ctx: CanvasRenderingContext2D, state: GameState, w: nu
     ctx.fillStyle = PAL.hudTextBright;
     ctx.font = '13px monospace';
     ctx.textAlign = 'left';
-    ctx.fillText(`DOG: ${Math.max(0, state.dog.health)}/${state.dog.maxHealth}`, hx + 4, dy + 14);
+    ctx.fillText(`DOG Lv${state.dog.level}: ${Math.max(0, state.dog.health)}/${state.dog.maxHealth}`, hx + 4, dy + 14);
+  }
+
+  // ── XP bar + Level (below health bars) ──
+  {
+    const xpY = state.dog && state.dog.alive ? hy + barH + 8 + barH + 8 : hy + barH + 8;
+    const xpBarH = 10;
+
+    ctx.fillStyle = PAL.hudBg;
+    ctx.fillRect(hx - 4, xpY - 4, barW + 8, xpBarH + 34);
+
+    ctx.fillStyle = PAL.hudTextBright;
+    ctx.font = '11px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText(`Lv.${state.playerLevel}`, hx, xpY + 10);
+
+    const labelW = 36;
+    const xpBarX = hx + labelW;
+    const xpBarW = barW - labelW;
+
+    const currentLevelXP = getXPForLevel(state.playerLevel);
+    const nextLevelXP = getXPForNextLevel(state.playerLevel);
+    const xpInLevel = state.playerXP - currentLevelXP;
+    const xpNeeded = nextLevelXP - currentLevelXP;
+    const xpPct = xpNeeded > 0 ? Math.min(1, xpInLevel / xpNeeded) : 1;
+
+    ctx.fillStyle = PAL.healthBarBg;
+    ctx.fillRect(xpBarX, xpY, xpBarW, xpBarH);
+
+    ctx.fillStyle = '#ffdd44';
+    ctx.fillRect(xpBarX, xpY, xpBarW * xpPct, xpBarH);
+
+    ctx.fillStyle = PAL.hudText;
+    ctx.font = '9px monospace';
+    ctx.fillText(`${state.playerXP} XP`, xpBarX + 2, xpY + 8);
+
+    // Attributes line
+    const attrY = xpY + xpBarH + 4;
+    const { str, dex, con } = state.playerAttributes;
+    ctx.fillStyle = PAL.narrativeText;
+    ctx.font = '10px monospace';
+    ctx.fillText(`STR ${str}  DEX ${dex}  CON ${con}`, hx, attrY + 8);
   }
 
   // ── Weapon info (bottom-left) ──
   const wx = 16;
   const wy = h - 60;
+  const weaponInstance = inventory.equipped.weapon;
+  const weaponDef = weaponInstance ? getWeaponDef(weaponInstance.defId) : null;
 
   ctx.fillStyle = PAL.hudBg;
   ctx.fillRect(wx - 4, wy - 4, 200, 52);
 
-  ctx.fillStyle = PAL.hudTextBright;
-  ctx.font = '13px monospace';
-  ctx.fillText(weapon.name, wx, wy + 14);
+  if (weaponDef && weaponInstance) {
+    const durability = weaponInstance.durability ?? 0;
+    const maxDurability = weaponDef.maxDurability;
 
-  const dtype = DAMAGE_TYPE_NAMES[weapon.damageType];
-  const broken = weapon.durability <= 0 ? ' [BROKEN]' : '';
-  ctx.fillStyle = weapon.durability <= 0 ? PAL.damageText : PAL.hudText;
-  ctx.font = '11px monospace';
-  ctx.fillText(`${dtype} | DMG:${weapon.baseDamage}${broken}`, wx, wy + 28);
+    ctx.fillStyle = PAL.hudTextBright;
+    ctx.font = '13px monospace';
+    ctx.fillText(weaponDef.name, wx, wy + 14);
 
-  // Durability bar
-  const dpct = weapon.durability / weapon.maxDurability;
-  ctx.fillStyle = PAL.durabilityBarBg;
-  ctx.fillRect(wx, wy + 34, 140, 8);
-  ctx.fillStyle = dpct > 0.3 ? PAL.durabilityBar : PAL.damageText;
-  ctx.fillRect(wx, wy + 34, 140 * dpct, 8);
+    const dtype = DAMAGE_TYPE_NAMES[weaponDef.damageType];
+    const broken = durability <= 0 ? ' [BROKEN]' : '';
+    ctx.fillStyle = durability <= 0 ? PAL.damageText : PAL.hudText;
+    ctx.font = '11px monospace';
+    ctx.fillText(`${dtype} | DMG:${weaponDef.baseDamage}${broken}`, wx, wy + 28);
 
-  // ── Floor number (top-right) ──
+    // Durability bar
+    const dpct = maxDurability > 0 ? durability / maxDurability : 0;
+    ctx.fillStyle = PAL.durabilityBarBg;
+    ctx.fillRect(wx, wy + 34, 140, 8);
+    ctx.fillStyle = dpct > 0.3 ? PAL.durabilityBar : PAL.damageText;
+    ctx.fillRect(wx, wy + 34, 140 * dpct, 8);
+  } else {
+    ctx.fillStyle = PAL.hudText;
+    ctx.font = '13px monospace';
+    ctx.fillText('No weapon', wx, wy + 14);
+  }
+
+  // ── Floor / Branch (top-right) ──
+  const branchLabel = state.progress.branch === 'main' ? '' : `${state.progress.branch.charAt(0).toUpperCase() + state.progress.branch.slice(1)} `;
+  const floorLabel = `${branchLabel}F${floor}`;
   ctx.fillStyle = PAL.hudBg;
-  ctx.fillRect(w - 100, 12, 88, 28);
+  ctx.fillRect(w - 120, 12, 108, 28);
   ctx.fillStyle = PAL.hudTextBright;
   ctx.font = '14px monospace';
   ctx.textAlign = 'right';
-  ctx.fillText(`Floor ${floor}`, w - 20, 32);
+  ctx.fillText(floorLabel, w - 20, 32);
 
   // ── Narrative messages (top-center) ──
   const visibleMessages = messages.filter((m) => m.timer > 0).slice(-5);

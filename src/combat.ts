@@ -1,7 +1,6 @@
 import {
   Attack,
   Entity,
-  Weapon,
   Direction,
   DamageType,
   GameState,
@@ -14,7 +13,14 @@ import {
   KNOCKBACK_THRUST,
   KNOCKBACK_CONTACT,
   DOG_REGEN_DELAY,
+  PLAYER_REGEN_DELAY,
 } from './config';
+import { computeXPReward, checkLevelUp, monsterXPForKill, checkMonsterLevelUp } from './progression';
+import { WeaponDef } from './items/defs';
+import { getWeaponDef } from './items';
+import { getSTRDamageBonus, getDEXSpeedMult, getCONHPBonus } from './attributes';
+import { getRoleDef } from './roles';
+import { triggerHitFlash, triggerWeaponSwing } from './animation';
 
 // ── Narrative message templates ──
 
@@ -114,20 +120,27 @@ export function resetCombatState(): void {
 }
 
 export function updateCombat(state: GameState, dt: number): void {
-  const { player, dog, weapon, attacks, enemies } = state;
+  const { player, dog, inventory, attacks, enemies } = state;
+  const weaponInstance = inventory.equipped.weapon;
+  const weaponDef = weaponInstance ? getWeaponDef(weaponInstance.defId) : null;
 
   // Decrease cooldown
   attackCooldown = Math.max(0, attackCooldown - dt * 1000);
 
-  // Player attack
-  if ((isKeyPressed(' ') || isKeyPressed('j')) && attackCooldown <= 0 && player.alive) {
-    const attack = createAttack(player, weapon);
+  // Player attack (STR adds damage, DEX speeds up cooldown)
+  const strBonus = getSTRDamageBonus(state.playerAttributes);
+  const dexMult = getDEXSpeedMult(state.playerAttributes);
+
+  if ((isKeyPressed(' ') || isKeyPressed('j')) && attackCooldown <= 0 && player.alive && weaponDef && weaponInstance) {
+    const durability = weaponInstance.durability ?? 0;
+    const attack = createAttack(player, weaponDef, durability, strBonus);
     attacks.push(attack);
-    attackCooldown = weapon.cooldown;
+    attackCooldown = weaponDef.cooldown * dexMult;
+    triggerWeaponSwing(player.anim);
 
     // Degrade weapon
-    if (weapon.durability > 0) {
-      weapon.durability--;
+    if (weaponInstance.durability != null && weaponInstance.durability > 0) {
+      weaponInstance.durability--;
     }
   }
 
@@ -148,10 +161,11 @@ export function updateCombat(state: GameState, dt: number): void {
         if (atk.sourceId === enemy.id) continue;
 
         if (rectsOverlap(atk, enemy)) {
-          const mult = enemy.def.vulnerabilities[atk.damageType];
+          const mult = enemy.def.vulnerabilities[atk.damageType] ?? 1.0;
           const dmg = Math.round(atk.damage * mult);
           enemy.health -= dmg;
           atk.hit = true;
+          triggerHitFlash(enemy.anim);
 
           const superEffective = mult >= 2.0;
           const resisted = mult <= 0.5;
@@ -194,6 +208,49 @@ export function updateCombat(state: GameState, dt: number): void {
               text: isDogAttack ? narrativeDogKill(enemy.def.name) : narrativeKill(enemy.def.name),
               timer: 5000,
             });
+
+            // Award XP (player always gets XP, even for dog kills)
+            const xpGain = computeXPReward(enemy.def.difficulty ?? 0);
+            state.playerXP += xpGain;
+
+            state.floatingTexts.push({
+              x: enemy.x + enemy.width / 2,
+              y: enemy.y - 12,
+              text: `+${xpGain} XP`,
+              color: '#ffdd44',
+              timer: 1200,
+              maxTimer: 1200,
+            });
+
+            // Check player level-up (CON-based HP, role-based hpDie)
+            const role = getRoleDef(state.playerRole);
+            const conBonus = getCONHPBonus(state.playerAttributes);
+            const levelUp = checkLevelUp(state.playerXP, state.playerLevel, role.hpDie, conBonus);
+            if (levelUp) {
+              state.playerLevel = levelUp.newLevel;
+              player.maxHealth += levelUp.hpGain;
+              player.health = player.maxHealth; // full heal on level-up
+              state.messages.push({
+                text: `You feel stronger! Level ${levelUp.newLevel}! (+${levelUp.hpGain} HP)`,
+                timer: 6000,
+              });
+            }
+
+            // Dog XP and leveling (dog gains XP from its own kills)
+            if (isDogAttack && dog) {
+              const dogXP = monsterXPForKill(enemy.def.difficulty ?? 0);
+              dog.xp += dogXP;
+              const dogLevelUp = checkMonsterLevelUp(dog.xp, dog.level, 3);
+              if (dogLevelUp) {
+                dog.level = dogLevelUp.newLevel;
+                dog.maxHealth += dogLevelUp.hpGain;
+                dog.health = Math.min(dog.health + dogLevelUp.hpGain, dog.maxHealth);
+                state.messages.push({
+                  text: `Your dog grows stronger! Level ${dogLevelUp.newLevel}! (+${dogLevelUp.hpGain} HP)`,
+                  timer: 5000,
+                });
+              }
+            }
           }
 
           break;
@@ -209,7 +266,10 @@ export function updateCombat(state: GameState, dt: number): void {
 
     if (enemy.contactTimer <= 0 && rectsOverlap(player, enemy)) {
       player.health -= enemy.def.damage;
-      enemy.contactTimer = enemy.def.contactCooldown;
+      triggerHitFlash(player.anim);
+      state.playerLastHitTimer = PLAYER_REGEN_DELAY;
+      state.playerRegenAccum = 0;
+      enemy.contactTimer = enemy.def.props.contactCooldown ?? 1000;
 
       // Knockback player away from enemy
       const cDx = (player.x + player.width / 2) - (enemy.x + enemy.width / 2);
@@ -250,9 +310,10 @@ export function updateCombat(state: GameState, dt: number): void {
 
       if (enemy.contactTimer <= 0 && rectsOverlap(dog, enemy)) {
         dog.health -= enemy.def.damage;
+        triggerHitFlash(dog.anim);
         dog.lastHitTimer = DOG_REGEN_DELAY;
         dog.regenAccum = 0;
-        enemy.contactTimer = enemy.def.contactCooldown;
+        enemy.contactTimer = enemy.def.props.contactCooldown ?? 1000;
 
         // Knockback dog away from enemy
         const cDx = (dog.x + dog.width / 2) - (enemy.x + enemy.width / 2);
@@ -287,37 +348,37 @@ export function updateCombat(state: GameState, dt: number): void {
   }
 }
 
-function createAttack(source: Entity, weapon: Weapon): Attack {
+function createAttack(source: Entity, weaponDef: WeaponDef, durability: number, damageBonus: number = 0): Attack {
   let x = source.x;
   let y = source.y;
   let w = 16;
   let h = 16;
 
-  const durabilityMult = weapon.durability > 0 ? 1 : 0.5;
+  const durabilityMult = durability > 0 ? 1 : 0.5;
 
   switch (source.facing) {
     case Direction.NORTH:
       x = source.x + source.width / 2 - 8;
-      y = source.y - weapon.range;
+      y = source.y - weaponDef.range;
       w = 16;
-      h = weapon.range;
+      h = weaponDef.range;
       break;
     case Direction.SOUTH:
       x = source.x + source.width / 2 - 8;
       y = source.y + source.height;
       w = 16;
-      h = weapon.range;
+      h = weaponDef.range;
       break;
     case Direction.WEST:
-      x = source.x - weapon.range;
+      x = source.x - weaponDef.range;
       y = source.y + source.height / 2 - 8;
-      w = weapon.range;
+      w = weaponDef.range;
       h = 16;
       break;
     case Direction.EAST:
       x = source.x + source.width;
       y = source.y + source.height / 2 - 8;
-      w = weapon.range;
+      w = weaponDef.range;
       h = 16;
       break;
   }
@@ -327,10 +388,10 @@ function createAttack(source: Entity, weapon: Weapon): Attack {
     y,
     width: w,
     height: h,
-    damageType: weapon.damageType,
-    damage: Math.round(weapon.baseDamage * durabilityMult),
+    damageType: weaponDef.damageType,
+    damage: Math.max(1, Math.round((weaponDef.baseDamage + damageBonus) * durabilityMult)),
     sourceId: source.id,
-    timer: weapon.attackDuration,
+    timer: weaponDef.attackDuration,
     hit: false,
   };
 }

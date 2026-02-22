@@ -6,6 +6,7 @@ export enum TileType {
   CORRIDOR,
   DOOR,
   STAIRS_DOWN,
+  STAIRS_UP,
 }
 
 export interface Tile {
@@ -44,6 +45,7 @@ export interface Entity {
   color: string;
   alive: boolean;
   hitTimer: number;
+  anim: AnimationState;
 }
 
 // ── Combat ────────────────────────────────────────────────
@@ -52,17 +54,6 @@ export enum DamageType {
   SLASH,
   THRUST,
   BLUNT,
-}
-
-export interface Weapon {
-  name: string;
-  damageType: DamageType;
-  baseDamage: number;
-  durability: number;
-  maxDurability: number;
-  range: number;
-  cooldown: number;
-  attackDuration: number;
 }
 
 export interface Attack {
@@ -86,23 +77,23 @@ export interface FloatingText {
   maxTimer: number;
 }
 
-export interface EnemyDef {
-  name: string;
-  color: string;
-  health: number;
-  speed: number;
-  damage: number;
-  contactCooldown: number;
-  vulnerabilities: Record<DamageType, number>;
-  weight: number;
-  ai: 'chase' | 'patrol';
-}
+export type { MonsterDef } from './monsters/defs';
+export type { ItemInstance } from './items/defs';
+
+import type { MonsterDef } from './monsters/defs';
+import type { ItemInstance } from './items/defs';
+import type { Inventory } from './inventory';
+import type { Attributes } from './attributes';
+import type { DungeonProgress } from './dungeon/progression';
+import type { StairsPlacement } from './dungeon/types';
+import type { AnimationState } from './animation';
 
 export interface EnemyEntity extends Entity {
-  def: EnemyDef;
+  def: MonsterDef;
   contactTimer: number;
-  aiState: 'idle' | 'patrol' | 'chase';
+  aiState: string;
   patrolTarget: { x: number; y: number } | null;
+  level: number;
 }
 
 // ── Companion ────────────────────────────────────────────
@@ -117,6 +108,8 @@ export interface CompanionEntity extends Entity {
   returnTimer: number;
   lastHitTimer: number;
   regenAccum: number;
+  level: number;
+  xp: number;
 }
 
 // ── Dungeon Generation ────────────────────────────────────
@@ -142,24 +135,49 @@ export interface DungeonResult {
   tiles: TileMap;
   rooms: Rect[];
   startRoom: Rect;
-  stairsRoom: Rect;
+  stairs: StairsPlacement[];
   width: number;
   height: number;
+}
+
+// ── Ground Items ─────────────────────────────────────────
+
+export interface GroundItem {
+  x: number;
+  y: number;
+  item: ItemInstance;
+}
+
+// ── Saved Floor (for persistence when moving between floors) ──
+
+export interface SavedFloor {
+  dungeon: DungeonResult;
+  enemies: EnemyEntity[];
+  groundItems: GroundItem[];
 }
 
 // ── Game State ────────────────────────────────────────────
 
 export interface GameState {
   dungeon: DungeonResult;
+  progress: DungeonProgress;
   player: Entity;
+  playerRole: string;
+  playerAttributes: Attributes;
+  playerLastHitTimer: number;
+  playerRegenAccum: number;
+  playerXP: number;
+  playerLevel: number;
+  inventory: Inventory;
   dog: CompanionEntity | null;
   enemies: EnemyEntity[];
   attacks: Attack[];
   floatingTexts: FloatingText[];
-  weapon: Weapon;
+  groundItems: GroundItem[];
   messages: { text: string; timer: number }[];
   floor: number;
   gameOver: boolean;
+  floorCache: Record<string, SavedFloor>;
 }
 
 // ── Constants (re-exported from config.ts) ───────────────

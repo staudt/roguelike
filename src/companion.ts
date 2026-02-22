@@ -12,6 +12,7 @@ import {
 import { getNextId } from './game';
 import { PAL } from './palette';
 import { moveToward } from './enemy';
+import { createAnimationState, triggerWeaponSwing } from './animation';
 import {
   DOG_SPEED,
   DOG_HEALTH,
@@ -52,6 +53,7 @@ export function createDog(playerX: number, playerY: number): CompanionEntity {
     color: PAL.dog,
     alive: true,
     hitTimer: 0,
+    anim: createAnimationState(),
     aiState: 'follow',
     targetEnemyId: null,
     attackCooldown: 0,
@@ -59,6 +61,8 @@ export function createDog(playerX: number, playerY: number): CompanionEntity {
     returnTimer: 0,
     lastHitTimer: 0,
     regenAccum: 0,
+    level: 1,
+    xp: 0,
   };
 }
 
@@ -206,6 +210,7 @@ function updateAttack(
     const attack = createBiteAttack(dog, target);
     state.attacks.push(attack);
     dog.attackCooldown = DOG_BITE_COOLDOWN;
+    triggerWeaponSwing(dog.anim);
   } else {
     // Chase the enemy
     moveToward(dog, targetCX, targetCY, DOG_SPEED, tiles, dt);

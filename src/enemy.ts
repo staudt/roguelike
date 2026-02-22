@@ -1,8 +1,7 @@
 import {
   Entity,
-  EnemyDef,
   EnemyEntity,
-  DamageType,
+  GameState,
   Direction,
   DungeonResult,
   TILE_SIZE,
@@ -12,43 +11,17 @@ import { getNextId } from './game';
 import { canMoveTo } from './player';
 import { FlowField, getFlowTarget } from './pathfinding';
 import { isWalkable } from './dungeon';
-import { PAL } from './palette';
+import { getMonstersForFloor } from './monsters/index';
+import { pickWeightedMonster } from './progression';
+import { hasTag, AI_CHASE } from './tags';
+import { runAI, AIContext } from './ai';
+import { createAnimationState } from './animation';
 
-export const ENEMY_DEFS: Record<string, EnemyDef> = {
-  zombie: {
-    name: 'Zombie',
-    color: PAL.zombie,
-    health: 30,
-    speed: 60,
-    damage: 8,
-    contactCooldown: 1000,
-    vulnerabilities: {
-      [DamageType.SLASH]: 2.0,
-      [DamageType.THRUST]: 1.0,
-      [DamageType.BLUNT]: 0.5,
-    },
-    weight: 1.5,
-    ai: 'chase',
-  },
-  skeleton: {
-    name: 'Skeleton',
-    color: PAL.skeleton,
-    health: 10,
-    speed: 100,
-    damage: 5,
-    contactCooldown: 800,
-    vulnerabilities: {
-      [DamageType.SLASH]: 0.5,
-      [DamageType.THRUST]: 1.0,
-      [DamageType.BLUNT]: 2.0,
-    },
-    weight: 0.7,
-    ai: 'patrol',
-  },
-};
-
-export function spawnEnemies(dungeon: DungeonResult, _playerId: number): EnemyEntity[] {
+export function spawnEnemies(dungeon: DungeonResult, _playerId: number, floor: number, playerLevel: number = 1, branch: string = 'main'): EnemyEntity[] {
   const enemies: EnemyEntity[] = [];
+  const eligible = getMonstersForFloor(floor, branch, playerLevel);
+
+  if (eligible.length === 0) return enemies;
 
   for (const room of dungeon.rooms) {
     // Don't spawn in starting room
@@ -57,8 +30,8 @@ export function spawnEnemies(dungeon: DungeonResult, _playerId: number): EnemyEn
     // 1-3 enemies per room
     const count = 1 + Math.floor(Math.random() * 3);
     for (let i = 0; i < count; i++) {
-      const defKey = Math.random() > 0.5 ? 'zombie' : 'skeleton';
-      const def = ENEMY_DEFS[defKey]!;
+      const def = pickWeightedMonster(eligible);
+      if (!def) continue;
 
       const ex = (room.x + 1 + Math.floor(Math.random() * (room.w - 2))) * TILE_SIZE + 4;
       const ey = (room.y + 1 + Math.floor(Math.random() * (room.h - 2))) * TILE_SIZE + 4;
@@ -80,10 +53,12 @@ export function spawnEnemies(dungeon: DungeonResult, _playerId: number): EnemyEn
         color: def.color,
         alive: true,
         hitTimer: 0,
+        anim: createAnimationState(),
         def,
         contactTimer: 0,
-        aiState: def.ai === 'chase' ? 'chase' : 'patrol',
+        aiState: hasTag(def.tags, AI_CHASE) ? 'chase' : 'patrol',
         patrolTarget: null,
+        level: 1,
       });
     }
   }
@@ -99,58 +74,29 @@ export function updateEnemies(
   tiles: TileMap,
   flow: FlowField,
   dt: number,
+  state: GameState,
 ): void {
   for (const e of enemies) {
     if (!e.alive) continue;
 
-    const dx = playerX - e.x;
-    const dy = playerY - e.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
+    const ctx: AIContext = {
+      entity: e,
+      playerX,
+      playerY,
+      playerAlive,
+      tiles,
+      flow,
+      state,
+      dt,
+    };
 
-    // Check if player is in detection range (8 tiles)
-    const detectionRange = 8 * TILE_SIZE;
-    const playerInRange = dist < detectionRange && playerAlive;
-
-    // When very close, move directly toward player for smooth contact
-    const closeRange = 1.5 * TILE_SIZE;
-
-    if (e.def.ai === 'chase') {
-      if (playerInRange) {
-        if (dist < closeRange) {
-          moveToward(e, playerX, playerY, e.def.speed, tiles, dt);
-        } else {
-          moveAlongFlow(e, flow, e.def.speed, tiles, dt);
-        }
-      }
-    } else {
-      // Patrol AI
-      if (playerInRange && dist < 5 * TILE_SIZE) {
-        e.aiState = 'chase';
-      }
-
-      if (e.aiState === 'chase' && playerInRange) {
-        if (dist < closeRange) {
-          moveToward(e, playerX, playerY, e.def.speed, tiles, dt);
-        } else {
-          moveAlongFlow(e, flow, e.def.speed, tiles, dt);
-        }
-      } else {
-        e.aiState = 'patrol';
-        if (!e.patrolTarget || Math.random() < 0.01) {
-          e.patrolTarget = {
-            x: e.x + (Math.random() - 0.5) * 3 * TILE_SIZE,
-            y: e.y + (Math.random() - 0.5) * 3 * TILE_SIZE,
-          };
-        }
-        moveToward(e, e.patrolTarget.x, e.patrolTarget.y, e.def.speed * 0.5, tiles, dt);
-      }
-    }
+    runAI(ctx);
   }
 }
 
 // Flow-field movement: follows the BFS flow field toward the player.
 // Allows diagonal movement — corner assist handles wall clipping.
-function moveAlongFlow(
+export function moveAlongFlow(
   entity: EnemyEntity,
   flow: FlowField,
   speed: number,

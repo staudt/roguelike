@@ -16,12 +16,18 @@ export const PAL = {
   player: '#3ddc84',
   dog: '#c4854c',
   zombie: '#cc3333',
-  skeleton: '#e8a040',
+  skeleton: '#bbb4aa',
 
   // Combat
   slashAttack: '#ffee58',
   thrustAttack: '#64b5f6',
   bluntAttack: '#ff8a65',
+
+  // Mines biome
+  minesWall: '#3a2a1a',
+  minesWallHighlight: '#4a3a2a',
+  minesFloor: '#5a4a32',
+  minesFogOverlay: 'rgba(10, 8, 4, 0.7)',
 
   // UI
   healthBar: '#4caf50',

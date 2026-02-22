@@ -1,14 +1,32 @@
 import { GameState, Entity, TileMap, KNOCKBACK_DECAY } from './types';
-import { ENTITY_OVERLAP_TOLERANCE } from './config';
+import {
+  ENTITY_OVERLAP_TOLERANCE,
+  PLAYER_REGEN_MIN_INTERVAL,
+  PLAYER_REGEN_MAX_INTERVAL,
+  PLAYER_REGEN_AMOUNT,
+} from './config';
 import { updatePlayer, canMoveTo } from './player';
 import { updateEnemies } from './enemy';
 import { updateDog } from './companion';
 import { computeFlowField } from './pathfinding';
+import { updateAnimation } from './animation';
 
 export function updateEntities(state: GameState, dt: number): void {
   const { player, dog, enemies, dungeon } = state;
 
   updatePlayer(player, dungeon.tiles, dt);
+
+  // Player health regen: faster when near death, slower at high health
+  state.playerLastHitTimer = Math.max(0, state.playerLastHitTimer - dt * 1000);
+  if (state.playerLastHitTimer <= 0 && player.alive && player.health < player.maxHealth) {
+    const healthPct = player.health / player.maxHealth;
+    const interval = PLAYER_REGEN_MIN_INTERVAL + (PLAYER_REGEN_MAX_INTERVAL - PLAYER_REGEN_MIN_INTERVAL) * healthPct;
+    state.playerRegenAccum += dt * 1000;
+    if (state.playerRegenAccum >= interval) {
+      state.playerRegenAccum -= interval;
+      player.health = Math.min(player.maxHealth, player.health + PLAYER_REGEN_AMOUNT);
+    }
+  }
 
   // Compute flow field from player (shared BFS for all enemies)
   const flow = computeFlowField(
@@ -25,6 +43,7 @@ export function updateEntities(state: GameState, dt: number): void {
     dungeon.tiles,
     flow,
     dt,
+    state,
   );
 
   // Update dog companion
@@ -60,6 +79,12 @@ export function updateEntities(state: GameState, dt: number): void {
 
   // Resolve entity-entity collisions (allow ~10% overlap)
   resolveEntityCollisions(allEntities, dungeon.tiles);
+
+  // Update animations for all entities
+  for (const e of allEntities) {
+    if (!e.alive) continue;
+    updateAnimation(e.anim, e.vx, e.vy, e.facing, dt);
+  }
 }
 
 function resolveEntityCollisions(entities: Entity[], tiles: TileMap): void {

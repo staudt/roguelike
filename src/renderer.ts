@@ -2,7 +2,6 @@ import {
   GameState,
   TileType,
   TILE_SIZE,
-  CAMERA_SCALE,
   DamageType,
   Direction,
   Entity,
@@ -10,13 +9,55 @@ import {
 import { Camera } from './camera';
 import { PAL } from './palette';
 
-const TILE_COLORS: Record<TileType, string> = {
-  [TileType.WALL]: PAL.wall,
-  [TileType.FLOOR]: PAL.floor,
-  [TileType.CORRIDOR]: PAL.corridor,
-  [TileType.DOOR]: PAL.door,
-  [TileType.STAIRS_DOWN]: PAL.stairs,
+interface BiomePalette {
+  wall: string;
+  wallHighlight: string;
+  floor: string;
+  corridor: string;
+  door: string;
+  stairs: string;
+  fogOverlay: string;
+}
+
+const MAIN_PALETTE: BiomePalette = {
+  wall: PAL.wall,
+  wallHighlight: PAL.wallHighlight,
+  floor: PAL.floor,
+  corridor: PAL.corridor,
+  door: PAL.door,
+  stairs: PAL.stairs,
+  fogOverlay: PAL.fogOverlay,
 };
+
+const MINES_PALETTE: BiomePalette = {
+  wall: PAL.minesWall,
+  wallHighlight: PAL.minesWallHighlight,
+  floor: PAL.minesFloor,
+  corridor: PAL.minesFloor,   // caves don't have corridors, but just in case
+  door: PAL.door,
+  stairs: PAL.stairs,
+  fogOverlay: PAL.minesFogOverlay,
+};
+
+const BIOME_PALETTES: Record<string, BiomePalette> = {
+  main: MAIN_PALETTE,
+  mines: MINES_PALETTE,
+};
+
+function getBiomePalette(branch: string): BiomePalette {
+  return BIOME_PALETTES[branch] ?? MAIN_PALETTE;
+}
+
+function getTileColor(tileType: TileType, biome: BiomePalette): string {
+  switch (tileType) {
+    case TileType.WALL: return biome.wall;
+    case TileType.FLOOR: return biome.floor;
+    case TileType.CORRIDOR: return biome.corridor;
+    case TileType.DOOR: return biome.door;
+    case TileType.STAIRS_DOWN: return biome.stairs;
+    case TileType.STAIRS_UP: return biome.stairs;
+  }
+}
 
 const ATTACK_COLORS: Record<DamageType, string> = {
   [DamageType.SLASH]: PAL.slashAttack,
@@ -29,11 +70,12 @@ export function render(
   state: GameState,
   cam: Camera,
 ): void {
-  const { dungeon, player, enemies, attacks } = state;
+  const { dungeon, progress, player, enemies, attacks } = state;
   const { tiles } = dungeon;
+  const biome = getBiomePalette(progress.branch);
 
   ctx.save();
-  ctx.scale(CAMERA_SCALE, CAMERA_SCALE);
+  ctx.scale(cam.scale, cam.scale);
 
   // Clear
   ctx.fillStyle = PAL.bg;
@@ -55,26 +97,32 @@ export function render(
       const screenY = ty * TILE_SIZE - cam.y;
 
       // Draw tile
-      ctx.fillStyle = TILE_COLORS[tile.type];
+      ctx.fillStyle = getTileColor(tile.type, biome);
       ctx.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
 
       // Wall top edge highlight for depth
       if (tile.type === TileType.WALL) {
-        ctx.fillStyle = PAL.wallHighlight;
+        ctx.fillStyle = biome.wallHighlight;
         ctx.fillRect(screenX, screenY, TILE_SIZE, 2);
       }
 
-      // Stairs marker
+      // Stairs markers
       if (tile.type === TileType.STAIRS_DOWN) {
         ctx.fillStyle = PAL.bg;
         ctx.font = '20px monospace';
         ctx.textAlign = 'center';
         ctx.fillText('>', screenX + TILE_SIZE / 2, screenY + TILE_SIZE / 2 + 6);
       }
+      if (tile.type === TileType.STAIRS_UP) {
+        ctx.fillStyle = PAL.bg;
+        ctx.font = '20px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('<', screenX + TILE_SIZE / 2, screenY + TILE_SIZE / 2 + 6);
+      }
 
       // Fog overlay for explored but not visible
       if (!tile.visible) {
-        ctx.fillStyle = PAL.fogOverlay;
+        ctx.fillStyle = biome.fogOverlay;
         ctx.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
       }
     }
@@ -171,12 +219,41 @@ export function render(
 }
 
 function drawEntity(ctx: CanvasRenderingContext2D, entity: Entity, cam: Camera): void {
+  const { anim } = entity;
   const sx = entity.x - cam.x;
   const sy = entity.y - cam.y;
+
+  const cx = sx + entity.width / 2;
+  const cy = sy + entity.height / 2;
+
+  ctx.save();
+
+  // Squash/stretch bounce — scale around entity's bottom center so feet stay planted
+  if (anim.bounceScaleY !== 0) {
+    const scaleY = 1 + anim.bounceScaleY;
+    const scaleX = 1 - anim.bounceScaleY * 0.5; // counter-squash to preserve volume
+    const bottomY = sy + entity.height;
+    ctx.translate(cx, bottomY);
+    ctx.scale(scaleX, scaleY);
+    ctx.translate(-cx, -bottomY);
+  }
+
+  // Mirror horizontally when facing left
+  if (!anim.facingRight) {
+    ctx.translate(cx, cy);
+    ctx.scale(-1, 1);
+    ctx.translate(-cx, -cy);
+  }
 
   // Body
   ctx.fillStyle = entity.color;
   ctx.fillRect(sx, sy, entity.width, entity.height);
+
+  // Hit flash overlay (white flash on top of body)
+  if (anim.hitFlashTimer > 0) {
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+    ctx.fillRect(sx, sy, entity.width, entity.height);
+  }
 
   // Simple border for depth
   ctx.strokeStyle = 'rgba(0,0,0,0.3)';
@@ -217,4 +294,46 @@ function drawEntity(ctx: CanvasRenderingContext2D, entity: Entity, cam: Camera):
   }
   ctx.fillRect(ex1, ey1, eyeSize, eyeSize);
   ctx.fillRect(ex2, ey2, eyeSize, eyeSize);
+
+  // Weapon overlay (small rectangle that swings during attack, direction-aware)
+  if (anim.weaponSwinging) {
+    const weaponLen = 14;
+    const weaponW = 4;
+    let pivotX: number, pivotY: number;
+    let baseAngle: number;
+
+    switch (entity.facing) {
+      case Direction.EAST:
+        pivotX = sx + entity.width - 2;
+        pivotY = cy;
+        baseAngle = 0;
+        break;
+      case Direction.WEST:
+        pivotX = sx + 2;
+        pivotY = cy;
+        baseAngle = Math.PI;
+        break;
+      case Direction.SOUTH:
+        pivotX = cx;
+        pivotY = sy + entity.height - 2;
+        baseAngle = Math.PI / 2;
+        break;
+      case Direction.NORTH:
+        pivotX = cx;
+        pivotY = sy + 2;
+        baseAngle = -Math.PI / 2;
+        break;
+    }
+
+    ctx.save();
+    ctx.translate(pivotX, pivotY);
+    ctx.rotate(baseAngle + anim.weaponAngle);
+    ctx.fillStyle = '#cccccc';
+    ctx.fillRect(0, -weaponW / 2, weaponLen, weaponW);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(weaponLen - 3, -weaponW / 2, 3, weaponW);
+    ctx.restore();
+  }
+
+  ctx.restore();
 }

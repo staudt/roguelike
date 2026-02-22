@@ -13,6 +13,10 @@ export const CAMERA_LERP_SPEED = 8;  // higher = snappier camera follow
 // ── Player ──
 export const PLAYER_SPEED = 160;     // pixels per second
 export const PLAYER_WEIGHT = 1.0;
+export const PLAYER_REGEN_DELAY = 5000;        // ms without damage before regen starts
+export const PLAYER_REGEN_MIN_INTERVAL = 500;  // ms per tick when near death
+export const PLAYER_REGEN_MAX_INTERVAL = 2500; // ms per tick at full-ish health
+export const PLAYER_REGEN_AMOUNT = 1;          // HP per tick
 
 // ── Field of View ──
 export const FOV_RANGE = 8;          // radius in tiles
