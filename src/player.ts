@@ -1,9 +1,25 @@
 import { Entity, Direction, TILE_SIZE, PLAYER_SPEED, TileMap } from './types';
 import { isKeyDown } from './input';
 import { isWalkable } from './dungeon';
+import { StatusEffect, StatusEffectType } from './status';
 
-export function updatePlayer(player: Entity, tiles: TileMap, dt: number): void {
+export function updatePlayer(player: Entity, tiles: TileMap, dt: number, statusEffects?: StatusEffect[]): void {
   if (!player.alive) return;
+
+  // Status effects that prevent movement
+  if (statusEffects) {
+    for (const eff of statusEffects) {
+      if (eff.type === StatusEffectType.PARALYZED || eff.type === StatusEffectType.IN_PIT) {
+        player.vx = 0;
+        player.vy = 0;
+        return;
+      }
+    }
+  }
+
+  // Slowed: reduce movement speed
+  const slowed = statusEffects?.some(e => e.type === StatusEffectType.SLOWED) ?? false;
+  const speedMult = slowed ? 0.4 : 1.0;
 
   // Read input → velocity
   let dx = 0;
@@ -20,8 +36,8 @@ export function updatePlayer(player: Entity, tiles: TileMap, dt: number): void {
     dy *= inv;
   }
 
-  player.vx = dx * PLAYER_SPEED;
-  player.vy = dy * PLAYER_SPEED;
+  player.vx = dx * PLAYER_SPEED * speedMult;
+  player.vy = dy * PLAYER_SPEED * speedMult;
 
   // Update facing direction
   if (dx > 0) player.facing = Direction.EAST;

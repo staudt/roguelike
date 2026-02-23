@@ -6,6 +6,7 @@ export interface Attributes {
   str: number;
   dex: number;
   con: number;
+  search: number;  // NetHack-style searching intrinsic; affects trap detection radius/chance
   // Future: int, wis, cha — added when magic/shops/NPCs exist
 }
 
@@ -40,6 +41,16 @@ function conHPBonus(con: number): number {
   return 3;
 }
 
+// SEARCH → trap detection score (used in probability formula)
+// Returns a skill value fed into: roll < search / (search + 20) per-frame
+function searchBonus(search: number): number {
+  if (search <= 5)  return 1;   // barely notices traps
+  if (search <= 9)  return 3;
+  if (search <= 13) return 6;
+  if (search <= 16) return 9;
+  return 12;                    // master searcher
+}
+
 // ── Public API ──────────────────────────────────────
 
 export function getSTRDamageBonus(attrs: Attributes): number {
@@ -52,4 +63,8 @@ export function getDEXSpeedMult(attrs: Attributes): number {
 
 export function getCONHPBonus(attrs: Attributes): number {
   return conHPBonus(attrs.con);
+}
+
+export function getSearchBonus(attrs: Attributes): number {
+  return searchBonus(attrs.search);
 }

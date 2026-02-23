@@ -86,3 +86,13 @@ export const TERRAIN_TILE_NAMES: Partial<Record<TileType, string>> = {
 
 // Mine-biome wall uses the gehennom/mines wall variant
 export const MINES_WALL_TILE_NAME = 'mines walls vertical';
+
+// ── Trap type → NetHack tile name (from other.txt) ────────────────────────────
+
+import { TrapType } from '../dungeon/types';
+
+export const TRAP_TILE_NAMES: Record<TrapType, string> = {
+  [TrapType.ARROW]:     'arrow trap',
+  [TrapType.PIT]:       'pit',
+  [TrapType.SLEEP_GAS]: 'sleeping gas trap',
+};

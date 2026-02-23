@@ -1,6 +1,7 @@
 import { MonsterDef } from './defs';
 import { DamageType } from '../types';
 import { PAL } from '../palette';
+import { StatusEffectType } from '../status';
 import {
   AMORPHOUS,
   MINDLESS, ALWAYS_HOSTILE,
@@ -13,17 +14,23 @@ import {
 
 export const SPECIAL_MONSTERS: MonsterDef[] = [
   // ── Floating Eye ────────────────────────────────────────
-  // Passive until attacked. Paralyzes on contact (gaze).
-  // Very low damage, but stun makes it dangerous near other monsters.
+  // Passive patrol creature. Harmless on contact, but if you strike it with
+  // melee and it SURVIVES, its gaze immediately paralyzes you. The trick is to
+  // one-shot it, use ranged attacks, or avoid it entirely.
   {
     id: 'floating_eye',
     name: 'floating eye',
     color: PAL.floatingEye,
-    health: 10,
+    health: 22,
     speed: 20,
     damage: 0,
     weight: 0.1,
-    vulnerabilities: {},
+    vulnerabilities: {
+      // Mildly resistant to all physical — forces multiple hits and more exposure to gaze
+      [DamageType.SLASH]:  0.75,
+      [DamageType.THRUST]: 0.75,
+      [DamageType.BLUNT]:  0.75,
+    },
     tags: [
       AMORPHOUS, MINDLESS, ALWAYS_HOSTILE,
       SIZE_SMALL,
@@ -35,6 +42,11 @@ export const SPECIAL_MONSTERS: MonsterDef[] = [
       contactCooldown: 2000,
       spawnFloorMin: 1,
       spawnFloorMax: 10,
+    },
+    onPlayerMeleeHit: {
+      type: StatusEffectType.PARALYZED,
+      chance: 1.0,
+      duration: 3000,
     },
   },
 
@@ -97,8 +109,8 @@ export const SPECIAL_MONSTERS: MonsterDef[] = [
   },
 
   // ── Yellow Light ────────────────────────────────────────
-  // Fast-moving energy creature. Explodes on death (not yet implemented).
-  // Very fragile, erratic movement.
+  // Fast-moving energy creature. Blinds on contact — its burst of light
+  // overwhelms your vision for several seconds, leaving you stumbling in fog.
   {
     id: 'yellow_light',
     name: 'yellow light',
@@ -119,6 +131,11 @@ export const SPECIAL_MONSTERS: MonsterDef[] = [
       contactCooldown: 600,
       spawnFloorMin: 2,
       spawnFloorMax: 10,
+    },
+    onPlayerContactHit: {
+      type: StatusEffectType.BLINDED,
+      chance: 0.8,
+      duration: 6000,
     },
   },
 ];

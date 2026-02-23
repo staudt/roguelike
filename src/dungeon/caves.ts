@@ -1,5 +1,5 @@
 import { TileMap, Tile, TileType, Rect } from '../types';
-import { MapGeneratorConfig, MapGeneratorResult, StairsPlacement } from './types';
+import { MapGeneratorConfig, MapGeneratorResult, StairsPlacement, Trap, TrapType } from './types';
 
 // ── Cellular Automata Cave Generator ─────────────────────
 // Used for Gnomish Mines-style organic caves.
@@ -160,6 +160,27 @@ function findCaverns(map: boolean[][], w: number, h: number): Rect[] {
   return caverns;
 }
 
+function placeCaveTraps(caveMap: boolean[][], rooms: Rect[], startRoom: Rect): Trap[] {
+  const traps: Trap[] = [];
+  // Caves get fewer traps — 20% chance per non-start room
+  for (const room of rooms) {
+    if (room === startRoom) continue;
+    if (Math.random() > 0.2) continue;
+    // Pick a random open tile in the room
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const tx = room.x + Math.floor(Math.random() * room.w);
+      const ty = room.y + Math.floor(Math.random() * room.h);
+      if (caveMap[ty]?.[tx]) {
+        // Weight: no arrow traps in caves (mines use pits and gas)
+        const type = Math.random() < 0.6 ? TrapType.PIT : TrapType.SLEEP_GAS;
+        traps.push({ tileX: tx, tileY: ty, type, revealed: false, triggered: false });
+        break;
+      }
+    }
+  }
+  return traps;
+}
+
 export function generateCaves(config: MapGeneratorConfig): MapGeneratorResult {
   const { width, height } = config;
 
@@ -261,11 +282,14 @@ export function generateCaves(config: MapGeneratorConfig): MapGeneratorResult {
     { room: stairsRoom, type: 'down' },
   ];
 
+  const traps = placeCaveTraps(caveMap, rooms, startRoom);
+
   return {
     tiles,
     rooms,
     startRoom,
     stairs,
+    traps,
     width,
     height,
   };

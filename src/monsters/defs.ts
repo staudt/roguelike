@@ -1,4 +1,5 @@
 import { DamageType } from '../types';
+import { StatusEffectType } from '../status';
 
 // ── Ability ─────────────────────────────────────────────
 // Structured because abilities need typed fields for the
@@ -41,6 +42,12 @@ export interface MonsterDef {
 
   // Special attacks / abilities
   abilities?: Ability[];
+
+  // Status effect applied to PLAYER when player's melee attack connects but doesn't kill this monster
+  onPlayerMeleeHit?: { type: StatusEffectType; chance: number; duration: number; magnitude?: number };
+
+  // Status effect applied to PLAYER when this monster deals contact damage
+  onPlayerContactHit?: { type: StatusEffectType; chance: number; duration: number; magnitude?: number };
 
   // Loot / equipment
   drops?: { itemId: string; chance: number }[];

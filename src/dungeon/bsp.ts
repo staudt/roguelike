@@ -1,5 +1,5 @@
 import { TileMap, Tile, TileType, BSPNode, Rect } from '../types';
-import { MapGeneratorConfig, MapGeneratorResult, StairsPlacement } from './types';
+import { MapGeneratorConfig, MapGeneratorResult, StairsPlacement, Trap, TrapType } from './types';
 
 const MIN_LEAF = 8;
 const MIN_ROOM = 4;
@@ -191,6 +191,43 @@ function distBetweenRooms(a: Rect, b: Rect): number {
   return Math.abs(ax - bx) + Math.abs(ay - by);
 }
 
+// ── Trap placement ──────────────────────────────────────
+// Weights by depth: pit traps dominate early, gas/arrow later.
+function pickTrapType(floor: number): TrapType {
+  let weights: [TrapType, number][];
+  if (floor <= 4) {
+    weights = [[TrapType.PIT, 5], [TrapType.ARROW, 3], [TrapType.SLEEP_GAS, 2]];
+  } else if (floor <= 10) {
+    weights = [[TrapType.PIT, 3], [TrapType.ARROW, 4], [TrapType.SLEEP_GAS, 3]];
+  } else {
+    weights = [[TrapType.PIT, 2], [TrapType.ARROW, 4], [TrapType.SLEEP_GAS, 4]];
+  }
+  const total = weights.reduce((s, [, w]) => s + w, 0);
+  let r = Math.random() * total;
+  for (const [type, w] of weights) {
+    r -= w;
+    if (r <= 0) return type;
+  }
+  return TrapType.PIT;
+}
+
+function placeBSPTraps(tiles: TileMap, rooms: Rect[], startRoom: Rect, floor: number): Trap[] {
+  const traps: Trap[] = [];
+
+  // ~20% chance of a single trap per non-start room (rooms only, no corridors)
+  for (const room of rooms) {
+    if (room === startRoom) continue;
+    if (Math.random() > 0.20) continue;
+    const tx = room.x + rand(1, room.w - 2);
+    const ty = room.y + rand(1, room.h - 2);
+    if (tiles[ty]?.[tx]?.type === TileType.FLOOR) {
+      traps.push({ tileX: tx, tileY: ty, type: pickTrapType(floor), revealed: false, triggered: false });
+    }
+  }
+
+  return traps;
+}
+
 // ── Mines entrance placement ──
 // On main dungeon floors 2-5, randomly place a branch entrance to the mines
 const MINES_ENTRANCE_FLOORS = [2, 3, 4, 5];
@@ -262,11 +299,14 @@ export function generateBSP(config: MapGeneratorConfig): MapGeneratorResult {
     }
   }
 
+  const traps = placeBSPTraps(tiles, rooms, startRoom, floor);
+
   return {
     tiles,
     rooms,
     startRoom,
     stairs,
+    traps,
     width,
     height,
   };

@@ -14,6 +14,7 @@ import {
   KNOCKBACK_CONTACT,
   DOG_REGEN_DELAY,
   PLAYER_REGEN_DELAY,
+  POISON_TICK_INTERVAL,
 } from './config';
 import { computeXPReward, checkLevelUp, monsterXPForKill, checkMonsterLevelUp } from './progression';
 import { WeaponDef } from './items/defs';
@@ -23,6 +24,27 @@ import { getRoleDef } from './roles';
 import { triggerHitFlash, triggerWeaponSwing } from './animation';
 import { getDogName, evolveDog } from './companion';
 import { getDogForm } from './config';
+import { StatusEffect, StatusEffectType } from './status';
+
+// ── Status Effect Helper ────────────────────────────────
+// Applies (or refreshes) a status effect on the player.
+// If the same type is already active, extends duration rather than stacking.
+export function applyStatusEffect(state: GameState, type: StatusEffectType, duration: number, magnitude: number = 0): void {
+  const existing = state.playerStatusEffects.find(e => e.type === type);
+  if (existing) {
+    // Refresh duration if new duration is longer
+    existing.duration = Math.max(existing.duration, duration);
+    return;
+  }
+  const effect: StatusEffect = {
+    type,
+    duration,
+    magnitude,
+    tickTimer: POISON_TICK_INTERVAL,
+    pitEscapeTimer: 0,
+  };
+  state.playerStatusEffects.push(effect);
+}
 
 // ── Narrative message templates ──
 
@@ -133,7 +155,12 @@ export function updateCombat(state: GameState, dt: number): void {
   const strBonus = getSTRDamageBonus(state.playerAttributes);
   const dexMult = getDEXSpeedMult(state.playerAttributes);
 
-  if ((isKeyPressed(' ') || isKeyPressed('j')) && attackCooldown <= 0 && player.alive && weaponDef && weaponInstance) {
+  // Block attacks while paralyzed or stuck in pit
+  const immobilized = state.playerStatusEffects.some(
+    e => e.type === StatusEffectType.PARALYZED || e.type === StatusEffectType.IN_PIT,
+  );
+
+  if (!immobilized && (isKeyPressed(' ') || isKeyPressed('j')) && attackCooldown <= 0 && player.alive && weaponDef && weaponInstance) {
     const durability = weaponInstance.durability ?? 0;
     const attack = createAttack(player, weaponDef, durability, strBonus);
     attacks.push(attack);
@@ -209,6 +236,20 @@ export function updateCombat(state: GameState, dt: number): void {
             timer: 800,
             maxTimer: 800,
           });
+
+          // Player melee hit effect (only player attacks, not dog; only if enemy survived)
+          if (!isDogAttack && enemy.health > 0 && enemy.def.onPlayerMeleeHit) {
+            const eff = enemy.def.onPlayerMeleeHit;
+            if (Math.random() < eff.chance) {
+              applyStatusEffect(state, eff.type, eff.duration, eff.magnitude ?? 0);
+              if (eff.type === StatusEffectType.PARALYZED) {
+                state.messages.push({
+                  text: `The ${enemy.def.name}'s gaze paralyzes you!`,
+                  timer: 5000,
+                });
+              }
+            }
+          }
 
           if (enemy.health <= 0) {
             enemy.alive = false;
@@ -310,6 +351,30 @@ export function updateCombat(state: GameState, dt: number): void {
         text: narrativePlayerHit(enemy.def.name),
         timer: 4000,
       });
+
+      // Contact hit status effect (e.g. pit viper poison, yellow light blindness)
+      if (enemy.def.onPlayerContactHit) {
+        const eff = enemy.def.onPlayerContactHit;
+        if (Math.random() < eff.chance) {
+          applyStatusEffect(state, eff.type, eff.duration, eff.magnitude ?? 0);
+          if (eff.type === StatusEffectType.POISONED) {
+            state.messages.push({
+              text: `The ${enemy.def.name}'s bite poisons you!`,
+              timer: 5000,
+            });
+          } else if (eff.type === StatusEffectType.SLOWED) {
+            state.messages.push({
+              text: `You feel sluggish from the ${enemy.def.name}'s attack!`,
+              timer: 5000,
+            });
+          } else if (eff.type === StatusEffectType.BLINDED) {
+            state.messages.push({
+              text: `The ${enemy.def.name} flashes brilliantly — you are blinded!`,
+              timer: 5000,
+            });
+          }
+        }
+      }
 
       // Floating damage on player
       state.floatingTexts.push({

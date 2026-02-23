@@ -9,6 +9,7 @@ import { renderHUD, updateMessages } from './hud';
 import { ROLES } from './roles';
 import { PAL } from './palette';
 import { GameState, TileType, TILE_SIZE } from './types';
+import { StatusEffectType } from './status';
 import { TileAtlas, loadNetHackAtlas } from './tiles/atlas';
 
 // ── Canvas setup ──
@@ -200,7 +201,8 @@ function gameLoop(now: number): void {
     // Update
     updateEntities(state, dt);
     updateCombat(state, dt);
-    computeFOV(state.dungeon.tiles, state.player);
+    const isBlind = state.playerStatusEffects.some(e => e.type === StatusEffectType.BLINDED);
+    computeFOV(state.dungeon.tiles, state.player, isBlind);
     updateCamera(cam, state.player, state.dungeon.width, state.dungeon.height, dt);
   }
 

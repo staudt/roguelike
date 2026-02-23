@@ -18,7 +18,10 @@ import {
   WEAPON_TILE_NAMES,
   TERRAIN_TILE_NAMES,
   MINES_WALL_TILE_NAME,
+  TRAP_TILE_NAMES,
 } from './tiles/mapping';
+import { StatusEffectType } from './status';
+import { TrapType } from './dungeon/types';
 
 // ── Biome palettes (fallback colored-rect rendering) ─────────────────────────
 
@@ -123,6 +126,43 @@ export function render(
     }
   }
 
+  // ── Draw revealed traps ──
+  if (dungeon.traps) {
+    for (const trap of dungeon.traps) {
+      if (!trap.revealed) continue;
+      const tileData = tiles[trap.tileY]?.[trap.tileX];
+      if (!tileData?.visible) continue;
+      const tsx = trap.tileX * TILE_SIZE - cam.x;
+      const tsy = trap.tileY * TILE_SIZE - cam.y;
+      if (trap.triggered) {
+        // Spent trap — faint darkened tile or X glyph fallback
+        ctx.globalAlpha = 0.3;
+        const drawn = atlas && drawTile(ctx, atlas, TRAP_TILE_NAMES[trap.type], tsx, tsy, TILE_SIZE, TILE_SIZE);
+        if (!drawn) {
+          ctx.font = `bold ${Math.floor(TILE_SIZE * 0.65)}px monospace`;
+          ctx.textAlign = 'center';
+          ctx.fillStyle = '#888888';
+          ctx.fillText('x', tsx + TILE_SIZE / 2, tsy + TILE_SIZE / 2 + 6);
+          ctx.textAlign = 'left';
+        }
+        ctx.globalAlpha = 1;
+      } else {
+        // Active revealed trap — try atlas tile, fall back to bright colored glyph
+        const drawn = atlas && drawTile(ctx, atlas, TRAP_TILE_NAMES[trap.type], tsx, tsy, TILE_SIZE, TILE_SIZE);
+        if (!drawn) {
+          const trapColor = trap.type === TrapType.PIT ? '#cc8833'
+            : trap.type === TrapType.ARROW ? '#ff5555'
+            : '#bb55ff'; // SLEEP_GAS
+          ctx.font = `bold ${Math.floor(TILE_SIZE * 0.75)}px monospace`;
+          ctx.textAlign = 'center';
+          ctx.fillStyle = trapColor;
+          ctx.fillText('^', tsx + TILE_SIZE / 2, tsy + TILE_SIZE * 0.75);
+          ctx.textAlign = 'left';
+        }
+      }
+    }
+  }
+
   // ── Draw enemies ──
   for (const enemy of enemies) {
     if (!enemy.alive) continue;
@@ -172,6 +212,34 @@ export function render(
     const equippedWeaponId = state.inventory.equipped.weapon?.defId;
     const weaponTileName   = equippedWeaponId ? WEAPON_TILE_NAMES[equippedWeaponId] : undefined;
     drawPlayerEntity(ctx, atlas, player, state.playerRole, weaponTileName, cam);
+
+    // Status effect overlays (drawn after the sprite so they appear on top)
+    if (state.playerStatusEffects.length > 0) {
+      const psx = player.x - cam.x;
+      const psy = player.y - cam.y;
+      const now = Date.now();
+      for (const eff of state.playerStatusEffects) {
+        let color: string;
+        let pulse: number;
+        if (eff.type === StatusEffectType.PARALYZED || eff.type === StatusEffectType.IN_PIT) {
+          color = '#4488ff';
+          pulse = 0.25 + Math.abs(Math.sin(now / 180)) * 0.3;
+        } else if (eff.type === StatusEffectType.POISONED) {
+          color = '#33cc44';
+          pulse = 0.25 + Math.abs(Math.sin(now / 120)) * 0.3;
+        } else if (eff.type === StatusEffectType.BLINDED) {
+          color = '#ffdd44';
+          pulse = 0.35 + Math.abs(Math.sin(now / 200)) * 0.25;
+        } else { // SLOWED
+          color = '#aaaaaa';
+          pulse = 0.3;
+        }
+        ctx.globalAlpha = pulse;
+        ctx.fillStyle = color;
+        ctx.fillRect(psx, psy, player.width, player.height);
+        ctx.globalAlpha = 1;
+      }
+    }
   }
 
   // ── Draw attacks ──
@@ -194,6 +262,16 @@ export function render(
     ctx.font = 'bold 14px monospace';
     ctx.textAlign = 'center';
     ctx.fillText(ft.text, ftx, fty);
+    ctx.globalAlpha = 1;
+  }
+
+  // ── Blindness vignette ──
+  if (state.playerStatusEffects.some(e => e.type === StatusEffectType.BLINDED)) {
+    const now = Date.now();
+    const pulse = 0.30 + Math.abs(Math.sin(now / 300)) * 0.12;
+    ctx.globalAlpha = pulse;
+    ctx.fillStyle = '#cc9900';
+    ctx.fillRect(0, 0, cam.width, cam.height);
     ctx.globalAlpha = 1;
   }
 

@@ -32,6 +32,14 @@ export const KNOCKBACK_CONTACT = 4.0; // multiplier for enemy contact knockback
 // ── Combat ──
 export const ENTITY_OVERLAP_TOLERANCE = 0.1; // fraction of overlap allowed (0.1 = 10%)
 
+// ── Traps ──
+export const TRAP_DETECT_RADIUS = 3;      // tiles — detection check range
+export const TRAP_DETECT_CHANCE_DIV = 20; // denominator in: search / (search + DIV) per-frame
+
+// ── Status Effects ──
+export const POISON_TICK_INTERVAL = 2000;  // ms between poison damage ticks
+export const PIT_ESCAPE_INTERVAL  = 1000;  // ms between DEX escape roll attempts
+
 // ── Dog Companion ──
 
 export interface DogForm {

@@ -2,7 +2,7 @@ import { TileMap, TileType, Entity, TILE_SIZE, FOV_RANGE } from './types';
 
 const CORRIDOR_FOV_RANGE = 1; // tiles of vision when inside a corridor
 
-export function computeFOV(tiles: TileMap, player: Entity): void {
+export function computeFOV(tiles: TileMap, player: Entity, isBlind: boolean = false): void {
   const h = tiles.length;
   const w = tiles[0]!.length;
 
@@ -15,6 +15,15 @@ export function computeFOV(tiles: TileMap, player: Entity): void {
 
   const cx = Math.floor((player.x + player.width / 2) / TILE_SIZE);
   const cy = Math.floor((player.y + player.height / 2) / TILE_SIZE);
+
+  // Blind: only the player's own tile is visible; rest of explored map shows as fog
+  if (isBlind) {
+    if (cy >= 0 && cy < h && cx >= 0 && cx < w) {
+      tiles[cy]![cx]!.visible = true;
+      tiles[cy]![cx]!.explored = true;
+    }
+    return;
+  }
 
   const playerInCorridor =
     cy >= 0 && cy < h && cx >= 0 && cx < w &&

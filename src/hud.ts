@@ -2,6 +2,7 @@ import { GameState, DamageType } from './types';
 import { PAL } from './palette';
 import { getXPForLevel, getXPForNextLevel } from './progression';
 import { getWeaponDef } from './items';
+import { StatusEffectType } from './status';
 
 const DAMAGE_TYPE_NAMES: Record<DamageType, string> = {
   [DamageType.SLASH]: 'SLASH',
@@ -55,9 +56,46 @@ export function renderHUD(ctx: CanvasRenderingContext2D, state: GameState, w: nu
     ctx.fillText(`DOG Lv${state.dog.level}: ${Math.max(0, state.dog.health)}/${state.dog.maxHealth}`, hx + 4, dy + 14);
   }
 
+  // ── Status effects row (below HP and dog bars) ──
+  {
+    const baseStatusY = state.dog && state.dog.alive ? hy + barH + 8 + barH + 8 : hy + barH + 8;
+    if (state.playerStatusEffects.length > 0) {
+      ctx.font = 'bold 10px monospace';
+      ctx.textAlign = 'left';
+      let sry = baseStatusY;
+      for (const eff of state.playerStatusEffects) {
+        let label: string;
+        let color: string;
+        if (eff.type === StatusEffectType.PARALYZED) {
+          label = `[PARALYZED ${(eff.duration / 1000).toFixed(1)}s]`;
+          color = '#6699ff';
+        } else if (eff.type === StatusEffectType.IN_PIT) {
+          label = '[TRAPPED IN PIT]';
+          color = '#cc8844';
+        } else if (eff.type === StatusEffectType.POISONED) {
+          label = `[POISONED ${(eff.duration / 1000).toFixed(1)}s]`;
+          color = '#44cc55';
+        } else if (eff.type === StatusEffectType.BLINDED) {
+          label = `[BLINDED ${(eff.duration / 1000).toFixed(1)}s]`;
+          color = '#ffcc33';
+        } else {
+          label = `[SLOWED ${(eff.duration / 1000).toFixed(1)}s]`;
+          color = '#aaaaaa';
+        }
+        const textW = ctx.measureText(label).width;
+        ctx.fillStyle = 'rgba(10,10,20,0.7)';
+        ctx.fillRect(hx - 4, sry - 2, textW + 8, 14);
+        ctx.fillStyle = color;
+        ctx.fillText(label, hx, sry + 10);
+        sry += 16;
+      }
+    }
+  }
+
   // ── XP bar + Level (below health bars) ──
   {
-    const xpY = state.dog && state.dog.alive ? hy + barH + 8 + barH + 8 : hy + barH + 8;
+    const statusRowH = state.playerStatusEffects.length * 16;
+    const xpY = (state.dog && state.dog.alive ? hy + barH + 8 + barH + 8 : hy + barH + 8) + statusRowH;
     const xpBarH = 10;
 
     ctx.fillStyle = PAL.hudBg;
@@ -90,10 +128,10 @@ export function renderHUD(ctx: CanvasRenderingContext2D, state: GameState, w: nu
 
     // Attributes line
     const attrY = xpY + xpBarH + 4;
-    const { str, dex, con } = state.playerAttributes;
+    const { str, dex, con, search } = state.playerAttributes;
     ctx.fillStyle = PAL.narrativeText;
     ctx.font = '10px monospace';
-    ctx.fillText(`STR ${str}  DEX ${dex}  CON ${con}`, hx, attrY + 8);
+    ctx.fillText(`STR ${str}  DEX ${dex}  CON ${con}  SCH ${search}`, hx, attrY + 8);
   }
 
   // ── Weapon info (bottom-left) ──

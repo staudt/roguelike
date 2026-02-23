@@ -87,6 +87,7 @@ export function createGameState(roleId: string = 'warrior'): GameState {
     playerRegenAccum: 0,
     playerXP: 0,
     playerLevel: 1,
+    playerStatusEffects: [],
     inventory,
     dog,
     enemies,
@@ -171,6 +172,7 @@ function loadOrGenerateFloor(state: GameState, spawnAtTile?: TileType): void {
   // Clear combat state (attacks are per-frame, don't persist)
   state.attacks = [];
   state.floatingTexts = [];
+  state.playerStatusEffects = [];
 }
 
 export function descendStairs(state: GameState, stairs: StairsPlacement): void {

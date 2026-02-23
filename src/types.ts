@@ -79,14 +79,17 @@ export interface FloatingText {
 
 export type { MonsterDef } from './monsters/defs';
 export type { ItemInstance } from './items/defs';
+export type { StatusEffect } from './status';
+export { StatusEffectType } from './status';
 
 import type { MonsterDef } from './monsters/defs';
 import type { ItemInstance } from './items/defs';
 import type { Inventory } from './inventory';
 import type { Attributes } from './attributes';
 import type { DungeonProgress } from './dungeon/progression';
-import type { StairsPlacement } from './dungeon/types';
+import type { StairsPlacement, Trap } from './dungeon/types';
 import type { AnimationState } from './animation';
+import type { StatusEffect } from './status';
 
 export interface EnemyEntity extends Entity {
   def: MonsterDef;
@@ -142,6 +145,7 @@ export interface DungeonResult {
   rooms: Rect[];
   startRoom: Rect;
   stairs: StairsPlacement[];
+  traps: Trap[];
   width: number;
   height: number;
 }
@@ -175,6 +179,7 @@ export interface GameState {
   playerRegenAccum: number;
   playerXP: number;
   playerLevel: number;
+  playerStatusEffects: StatusEffect[];
   inventory: Inventory;
   dog: CompanionEntity | null;
   enemies: EnemyEntity[];

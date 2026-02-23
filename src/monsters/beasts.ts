@@ -1,6 +1,7 @@
 import { MonsterDef } from './defs';
 import { DamageType } from '../types';
 import { PAL } from '../palette';
+import { StatusEffectType } from '../status';
 import {
   BEAST, HAS_HEAD, HAS_LEGS, HAS_WINGS,
   SIZE_TINY, SIZE_SMALL, SIZE_MEDIUM,
@@ -235,6 +236,12 @@ export const BEAST_MONSTERS: MonsterDef[] = [
       contactCooldown: 600,
       spawnFloorMin: 4,
       spawnFloorMax: 12,
+    },
+    onPlayerContactHit: {
+      type: StatusEffectType.POISONED,
+      chance: 0.6,
+      duration: 10000,
+      magnitude: 2,
     },
   },
 ];

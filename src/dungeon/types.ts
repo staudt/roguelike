@@ -9,6 +9,22 @@ export interface StairsPlacement {
   targetFloor?: number;    // floor to enter in target branch
 }
 
+// ── Traps ────────────────────────────────────────────────
+
+export enum TrapType {
+  ARROW     = 'arrow',
+  PIT       = 'pit',
+  SLEEP_GAS = 'sleep_gas',
+}
+
+export interface Trap {
+  tileX:     number;
+  tileY:     number;
+  type:      TrapType;
+  revealed:  boolean;   // player has spotted it before stepping on it
+  triggered: boolean;   // spent/consumed (one-shot)
+}
+
 export interface MapGeneratorConfig {
   width: number;
   height: number;
@@ -21,6 +37,7 @@ export interface MapGeneratorResult {
   rooms: Rect[];
   startRoom: Rect;
   stairs: StairsPlacement[];
+  traps: Trap[];
   width: number;
   height: number;
 }

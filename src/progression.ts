@@ -58,9 +58,10 @@ export function computeDifficulty(def: MonsterDef): number {
 
 // ── XP Reward ───────────────────────────────────────────
 // Quadratic scaling: harder monsters are disproportionately rewarding.
+// Divided by 4 so leveling requires ~4x more kills than the naive formula.
 
 export function computeXPReward(difficulty: number): number {
-  return 1 + difficulty * difficulty;
+  return Math.max(1, Math.round(difficulty * difficulty / 4));
 }
 
 // ── Player Leveling ─────────────────────────────────────
