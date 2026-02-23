@@ -5,7 +5,7 @@ import {
   PLAYER_REGEN_MAX_INTERVAL,
   PLAYER_REGEN_AMOUNT,
 } from './config';
-import { updatePlayer, canMoveTo } from './player';
+import { canMoveTo } from './player';
 import { updateEnemies } from './enemy';
 import { updateDog } from './companion';
 import { computeFlowField } from './pathfinding';
@@ -13,8 +13,6 @@ import { updateAnimation } from './animation';
 
 export function updateEntities(state: GameState, dt: number): void {
   const { player, dog, enemies, dungeon } = state;
-
-  updatePlayer(player, dungeon.tiles, dt);
 
   // Player health regen: faster when near death, slower at high health
   state.playerLastHitTimer = Math.max(0, state.playerLastHitTimer - dt * 1000);
