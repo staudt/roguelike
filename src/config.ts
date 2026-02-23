@@ -7,7 +7,7 @@ export const MAP_WIDTH = 50;
 export const MAP_HEIGHT = 40;
 
 // ── Camera ──
-export const CAMERA_SCALE = 2;       // 1 = no zoom, 2 = 2× zoom
+export const CAMERA_SCALE = 1;       // 1 = no zoom, 2 = 2× zoom
 export const CAMERA_LERP_SPEED = 8;  // higher = snappier camera follow
 
 // ── Player ──

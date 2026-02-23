@@ -5,9 +5,22 @@ import {
   DamageType,
   Direction,
   Entity,
+  EnemyEntity,
+  CompanionEntity,
 } from './types';
 import { Camera } from './camera';
 import { PAL } from './palette';
+import { TileAtlas, drawTile } from './tiles/atlas';
+import {
+  MONSTER_TILE_NAMES,
+  DOG_FORM_TILE_NAMES,
+  PLAYER_ROLE_TILE_NAMES,
+  WEAPON_TILE_NAMES,
+  TERRAIN_TILE_NAMES,
+  MINES_WALL_TILE_NAME,
+} from './tiles/mapping';
+
+// ── Biome palettes (fallback colored-rect rendering) ─────────────────────────
 
 interface BiomePalette {
   wall: string;
@@ -33,7 +46,7 @@ const MINES_PALETTE: BiomePalette = {
   wall: PAL.minesWall,
   wallHighlight: PAL.minesWallHighlight,
   floor: PAL.minesFloor,
-  corridor: PAL.minesFloor,   // caves don't have corridors, but just in case
+  corridor: PAL.minesFloor,
   door: PAL.door,
   stairs: PAL.stairs,
   fogOverlay: PAL.minesFogOverlay,
@@ -50,25 +63,28 @@ function getBiomePalette(branch: string): BiomePalette {
 
 function getTileColor(tileType: TileType, biome: BiomePalette): string {
   switch (tileType) {
-    case TileType.WALL: return biome.wall;
-    case TileType.FLOOR: return biome.floor;
-    case TileType.CORRIDOR: return biome.corridor;
-    case TileType.DOOR: return biome.door;
+    case TileType.WALL:        return biome.wall;
+    case TileType.FLOOR:       return biome.floor;
+    case TileType.CORRIDOR:    return biome.corridor;
+    case TileType.DOOR:        return biome.door;
     case TileType.STAIRS_DOWN: return biome.stairs;
-    case TileType.STAIRS_UP: return biome.stairs;
+    case TileType.STAIRS_UP:   return biome.stairs;
   }
 }
 
 const ATTACK_COLORS: Record<DamageType, string> = {
-  [DamageType.SLASH]: PAL.slashAttack,
+  [DamageType.SLASH]:  PAL.slashAttack,
   [DamageType.THRUST]: PAL.thrustAttack,
-  [DamageType.BLUNT]: PAL.bluntAttack,
+  [DamageType.BLUNT]:  PAL.bluntAttack,
 };
+
+// ── Main render ───────────────────────────────────────────────────────────────
 
 export function render(
   ctx: CanvasRenderingContext2D,
   state: GameState,
   cam: Camera,
+  atlas: TileAtlas | null = null,
 ): void {
   const { dungeon, progress, player, enemies, attacks } = state;
   const { tiles } = dungeon;
@@ -76,201 +92,271 @@ export function render(
 
   ctx.save();
   ctx.scale(cam.scale, cam.scale);
+  if (atlas) ctx.imageSmoothingEnabled = false;
 
   // Clear
   ctx.fillStyle = PAL.bg;
   ctx.fillRect(0, 0, cam.width, cam.height);
 
-  // Calculate visible tile range
+  // Tile range in view
   const startTX = Math.max(0, Math.floor(cam.x / TILE_SIZE));
   const startTY = Math.max(0, Math.floor(cam.y / TILE_SIZE));
-  const endTX = Math.min(dungeon.width, Math.ceil((cam.x + cam.width) / TILE_SIZE) + 1);
-  const endTY = Math.min(dungeon.height, Math.ceil((cam.y + cam.height) / TILE_SIZE) + 1);
+  const endTX   = Math.min(dungeon.width,  Math.ceil((cam.x + cam.width)  / TILE_SIZE) + 1);
+  const endTY   = Math.min(dungeon.height, Math.ceil((cam.y + cam.height) / TILE_SIZE) + 1);
 
-  // Draw tiles
+  // ── Draw terrain ──
   for (let ty = startTY; ty < endTY; ty++) {
     for (let tx = startTX; tx < endTX; tx++) {
       const tile = tiles[ty]![tx]!;
       if (!tile.explored) continue;
 
-      const screenX = tx * TILE_SIZE - cam.x;
-      const screenY = ty * TILE_SIZE - cam.y;
+      const sx = tx * TILE_SIZE - cam.x;
+      const sy = ty * TILE_SIZE - cam.y;
 
-      // Draw tile
-      ctx.fillStyle = getTileColor(tile.type, biome);
-      ctx.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
+      drawTerrainTile(ctx, atlas, tile.type, progress.branch, sx, sy, biome);
 
-      // Wall top edge highlight for depth
-      if (tile.type === TileType.WALL) {
-        ctx.fillStyle = biome.wallHighlight;
-        ctx.fillRect(screenX, screenY, TILE_SIZE, 2);
-      }
-
-      // Stairs markers
-      if (tile.type === TileType.STAIRS_DOWN) {
-        ctx.fillStyle = PAL.bg;
-        ctx.font = '20px monospace';
-        ctx.textAlign = 'center';
-        ctx.fillText('>', screenX + TILE_SIZE / 2, screenY + TILE_SIZE / 2 + 6);
-      }
-      if (tile.type === TileType.STAIRS_UP) {
-        ctx.fillStyle = PAL.bg;
-        ctx.font = '20px monospace';
-        ctx.textAlign = 'center';
-        ctx.fillText('<', screenX + TILE_SIZE / 2, screenY + TILE_SIZE / 2 + 6);
-      }
-
-      // Fog overlay for explored but not visible
+      // Fog overlay for explored-but-not-visible tiles
       if (!tile.visible) {
         ctx.fillStyle = biome.fogOverlay;
-        ctx.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
+        ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
       }
     }
   }
 
-  // Draw enemies (only if on visible tile)
+  // ── Draw enemies ──
   for (const enemy of enemies) {
     if (!enemy.alive) continue;
-    const etx = Math.floor((enemy.x + enemy.width / 2) / TILE_SIZE);
+    const etx = Math.floor((enemy.x + enemy.width  / 2) / TILE_SIZE);
     const ety = Math.floor((enemy.y + enemy.height / 2) / TILE_SIZE);
-    if (etx < 0 || ety < 0 || ety >= tiles.length || etx >= tiles[0]!.length) continue;
+    if (etx < 0 || ety < 0 || ety >= tiles.length || etx >= (tiles[0]?.length ?? 0)) continue;
     if (!tiles[ety]![etx]!.visible) continue;
 
-    drawEntity(ctx, enemy, cam, !enemy.hostile);
+    drawEnemyEntity(ctx, atlas, enemy, cam);
 
-    const sx = enemy.x - cam.x;
-    const sy = enemy.y - cam.y - 6;
+    const esx = enemy.x - cam.x;
+    const esy = enemy.y - cam.y - 6;
     if (enemy.hostile) {
-      // Health bar above hostile enemy
-      const barW = enemy.width;
-      const barH = 3;
       const pct = enemy.health / enemy.maxHealth;
       ctx.fillStyle = PAL.healthBarBg;
-      ctx.fillRect(sx, sy, barW, barH);
+      ctx.fillRect(esx, esy, enemy.width, 3);
       ctx.fillStyle = pct > 0.5 ? PAL.healthBar : PAL.damageText;
-      ctx.fillRect(sx, sy, barW * pct, barH);
+      ctx.fillRect(esx, esy, enemy.width * pct, 3);
     } else {
-      // Peaceful indicator — small cyan dot above entity
       ctx.fillStyle = PAL.peacefulIndicator;
       ctx.beginPath();
-      ctx.arc(sx + enemy.width / 2, sy, 3, 0, Math.PI * 2);
+      ctx.arc(esx + enemy.width / 2, esy, 3, 0, Math.PI * 2);
       ctx.fill();
     }
   }
 
-  // Draw dog companion (if alive and visible)
+  // ── Draw dog companion ──
   const { dog } = state;
   if (dog && dog.alive) {
-    const dtx = Math.floor((dog.x + dog.width / 2) / TILE_SIZE);
+    const dtx = Math.floor((dog.x + dog.width  / 2) / TILE_SIZE);
     const dty = Math.floor((dog.y + dog.height / 2) / TILE_SIZE);
-    if (dtx >= 0 && dty >= 0 && dty < tiles.length && dtx < tiles[0]!.length && tiles[dty]![dtx]!.visible) {
-      drawEntity(ctx, dog, cam);
+    if (dtx >= 0 && dty >= 0 && dty < tiles.length && dtx < (tiles[0]?.length ?? 0) && tiles[dty]![dtx]!.visible) {
+      drawDogEntity(ctx, atlas, dog, cam);
 
-      // Health bar above dog
       const dsx = dog.x - cam.x;
       const dsy = dog.y - cam.y - 6;
-      const dBarW = dog.width;
-      const dBarH = 3;
       const dPct = dog.health / dog.maxHealth;
       ctx.fillStyle = PAL.healthBarBg;
-      ctx.fillRect(dsx, dsy, dBarW, dBarH);
+      ctx.fillRect(dsx, dsy, dog.width, 3);
       ctx.fillStyle = dPct > 0.5 ? PAL.healthBar : PAL.damageText;
-      ctx.fillRect(dsx, dsy, dBarW * dPct, dBarH);
+      ctx.fillRect(dsx, dsy, dog.width * dPct, 3);
     }
   }
 
-  // Draw player
+  // ── Draw player ──
   if (player.alive) {
-    drawEntity(ctx, player, cam);
-
-    // Direction indicator (small white dot showing facing)
-    const pcx = player.x + player.width / 2 - cam.x;
-    const pcy = player.y + player.height / 2 - cam.y;
-    let ix = pcx;
-    let iy = pcy;
-    switch (player.facing) {
-      case Direction.NORTH: iy -= player.height / 2 + 2; break;
-      case Direction.SOUTH: iy += player.height / 2 + 2; break;
-      case Direction.WEST: ix -= player.width / 2 + 2; break;
-      case Direction.EAST: ix += player.width / 2 + 2; break;
-    }
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath();
-    ctx.arc(ix, iy, 2, 0, Math.PI * 2);
-    ctx.fill();
+    const equippedWeaponId = state.inventory.equipped.weapon?.defId;
+    const weaponTileName   = equippedWeaponId ? WEAPON_TILE_NAMES[equippedWeaponId] : undefined;
+    drawPlayerEntity(ctx, atlas, player, state.playerRole, weaponTileName, cam);
   }
 
-  // Draw attacks (on top of all entities)
+  // ── Draw attacks ──
   for (const atk of attacks) {
-    const sx = atk.x - cam.x;
-    const sy = atk.y - cam.y;
+    const asx = atk.x - cam.x;
+    const asy = atk.y - cam.y;
     ctx.globalAlpha = Math.min(1, atk.timer / 50);
     ctx.fillStyle = ATTACK_COLORS[atk.damageType];
-    ctx.fillRect(sx, sy, atk.width, atk.height);
+    ctx.fillRect(asx, asy, atk.width, atk.height);
     ctx.globalAlpha = 1;
   }
 
-  // Draw floating damage numbers (topmost layer)
+  // ── Floating damage numbers ──
   for (const ft of state.floatingTexts) {
-    const sx = ft.x - cam.x;
-    const sy = ft.y - cam.y;
+    const ftx = ft.x - cam.x;
+    const fty = ft.y - cam.y;
     const alpha = Math.min(1, ft.timer / (ft.maxTimer * 0.3));
     ctx.globalAlpha = alpha;
     ctx.fillStyle = ft.color;
     ctx.font = 'bold 14px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText(ft.text, sx, sy);
+    ctx.fillText(ft.text, ftx, fty);
     ctx.globalAlpha = 1;
   }
 
   ctx.restore();
 }
 
-function drawEntity(ctx: CanvasRenderingContext2D, entity: Entity, cam: Camera, peaceful: boolean = false): void {
-  const { anim } = entity;
-  const sx = entity.x - cam.x;
-  const sy = entity.y - cam.y;
+// ── Terrain ───────────────────────────────────────────────────────────────────
 
-  const cx = sx + entity.width / 2;
-  const cy = sy + entity.height / 2;
+function drawTerrainTile(
+  ctx: CanvasRenderingContext2D,
+  atlas: TileAtlas | null,
+  tileType: TileType,
+  branch: string,
+  screenX: number,
+  screenY: number,
+  biome: BiomePalette,
+): void {
+  if (atlas) {
+    let name = TERRAIN_TILE_NAMES[tileType];
+    if (tileType === TileType.WALL && branch === 'mines') name = MINES_WALL_TILE_NAME;
+    if (name && drawTile(ctx, atlas, name, screenX, screenY, TILE_SIZE, TILE_SIZE)) return;
+  }
+
+  // Fallback colored rect
+  ctx.fillStyle = getTileColor(tileType, biome);
+  ctx.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
+  if (tileType === TileType.WALL) {
+    ctx.fillStyle = biome.wallHighlight;
+    ctx.fillRect(screenX, screenY, TILE_SIZE, 2);
+  }
+  // Stair glyphs in fallback mode
+  if (tileType === TileType.STAIRS_DOWN || tileType === TileType.STAIRS_UP) {
+    ctx.fillStyle = PAL.bg;
+    ctx.font = '20px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(
+      tileType === TileType.STAIRS_DOWN ? '>' : '<',
+      screenX + TILE_SIZE / 2,
+      screenY + TILE_SIZE / 2 + 6,
+    );
+  }
+}
+
+// ── Sprite drawing with animation ─────────────────────────────────────────────
+
+/**
+ * Attempt to draw a named NetHack tile sprite for an entity, with all the
+ * animation transforms (bounce, mirror, hit flash, weapon swing).
+ * Falls back to the colored-rectangle renderer if the tile isn't in the atlas.
+ */
+function drawEntitySprite(
+  ctx: CanvasRenderingContext2D,
+  atlas: TileAtlas | null,
+  tileName: string | undefined,
+  entity: Entity,
+  cam: Camera,
+  peaceful = false,
+  weaponTileName?: string,
+): void {
+  const { anim } = entity;
+  const sx  = entity.x - cam.x;
+  const sy  = entity.y - cam.y;
+  const cx  = sx + entity.width  / 2;
+  const cy  = sy + entity.height / 2;
 
   ctx.save();
 
-  // Squash/stretch bounce — scale around entity's bottom center so feet stay planted
+  // Squash/stretch bounce
   if (anim.bounceScaleY !== 0) {
-    const scaleY = 1 + anim.bounceScaleY;
-    const scaleX = 1 - anim.bounceScaleY * 0.5; // counter-squash to preserve volume
+    const scaleY  = 1 + anim.bounceScaleY;
+    const scaleX  = 1 - anim.bounceScaleY * 0.5;
     const bottomY = sy + entity.height;
     ctx.translate(cx, bottomY);
     ctx.scale(scaleX, scaleY);
     ctx.translate(-cx, -bottomY);
   }
 
-  // Mirror horizontally when facing left
+  // Mirror when facing left
   if (!anim.facingRight) {
     ctx.translate(cx, cy);
     ctx.scale(-1, 1);
     ctx.translate(-cx, -cy);
   }
 
-  // Body
-  ctx.fillStyle = entity.color;
-  ctx.fillRect(sx, sy, entity.width, entity.height);
+  let usedSprite = false;
 
-  // Hit flash overlay (white flash on top of body)
-  if (anim.hitFlashTimer > 0) {
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-    ctx.fillRect(sx, sy, entity.width, entity.height);
+  if (atlas && tileName) {
+    usedSprite = drawTile(ctx, atlas, tileName, sx, sy, entity.width, entity.height);
   }
 
-  // Border — cyan for peaceful, dark for hostile
-  ctx.strokeStyle = peaceful ? PAL.peacefulIndicator : 'rgba(0,0,0,0.3)';
-  ctx.lineWidth = peaceful ? 1.5 : 1;
-  ctx.strokeRect(sx + 0.5, sy + 0.5, entity.width - 1, entity.height - 1);
+  if (!usedSprite) {
+    // Colored rectangle fallback
+    ctx.fillStyle = entity.color;
+    ctx.fillRect(sx, sy, entity.width, entity.height);
 
-  // Eyes (two small dots)
+    ctx.strokeStyle = peaceful ? PAL.peacefulIndicator : 'rgba(0,0,0,0.3)';
+    ctx.lineWidth   = peaceful ? 1.5 : 1;
+    ctx.strokeRect(sx + 0.5, sy + 0.5, entity.width - 1, entity.height - 1);
+
+    drawEyes(ctx, entity, sx, sy);
+  }
+
+  // Hit flash overlay
+  if (anim.hitFlashTimer > 0) {
+    ctx.globalAlpha = 0.65;
+    ctx.fillStyle   = '#ffffff';
+    ctx.fillRect(sx, sy, entity.width, entity.height);
+    ctx.globalAlpha = 1;
+  }
+
+  // Weapon overlay — tile sprite (always shown as held, swings on attack)
+  // or colored-rect fallback (only shown when swinging)
+  if (weaponTileName && atlas) {
+    drawWeaponTileOverlay(ctx, atlas, weaponTileName, entity, sx, sy, cx, cy);
+  } else if (anim.weaponSwinging) {
+    drawWeaponSwing(ctx, entity, sx, sy, cx, cy);
+  }
+
+  ctx.restore();
+}
+
+function drawEnemyEntity(
+  ctx: CanvasRenderingContext2D,
+  atlas: TileAtlas | null,
+  enemy: EnemyEntity,
+  cam: Camera,
+): void {
+  const tileName = MONSTER_TILE_NAMES[enemy.def.id];
+  drawEntitySprite(ctx, atlas, tileName, enemy, cam, !enemy.hostile);
+}
+
+function drawDogEntity(
+  ctx: CanvasRenderingContext2D,
+  atlas: TileAtlas | null,
+  dog: CompanionEntity,
+  cam: Camera,
+): void {
+  const tileName = DOG_FORM_TILE_NAMES[dog.form];
+  drawEntitySprite(ctx, atlas, tileName, dog, cam);
+}
+
+function drawPlayerEntity(
+  ctx: CanvasRenderingContext2D,
+  atlas: TileAtlas | null,
+  player: Entity,
+  roleId: string,
+  weaponTileName: string | undefined,
+  cam: Camera,
+): void {
+  const tileName = PLAYER_ROLE_TILE_NAMES[roleId];
+  drawEntitySprite(ctx, atlas, tileName, player, cam, false, weaponTileName);
+}
+
+// ── Fallback helpers ──────────────────────────────────────────────────────────
+
+function drawEyes(
+  ctx: CanvasRenderingContext2D,
+  entity: Entity,
+  sx: number,
+  sy: number,
+): void {
   ctx.fillStyle = '#ffffff';
-  const eyeSize = 3;
+  const eyeSize    = 3;
   const eyeSpacing = 5;
   let ex1: number, ey1: number, ex2: number, ey2: number;
 
@@ -293,7 +379,7 @@ function drawEntity(ctx: CanvasRenderingContext2D, entity: Entity, cam: Camera, 
       ex2 = ex1;
       ey2 = sy + entity.height / 2 + eyeSpacing - eyeSize;
       break;
-    case Direction.EAST:
+    default: // EAST
       ex1 = sx + entity.width / 2 + 3;
       ey1 = sy + entity.height / 2 - eyeSpacing;
       ex2 = ex1;
@@ -302,46 +388,89 @@ function drawEntity(ctx: CanvasRenderingContext2D, entity: Entity, cam: Camera, 
   }
   ctx.fillRect(ex1, ey1, eyeSize, eyeSize);
   ctx.fillRect(ex2, ey2, eyeSize, eyeSize);
+}
 
-  // Weapon overlay (small rectangle that swings during attack, direction-aware)
-  if (anim.weaponSwinging) {
-    const weaponLen = 14;
-    const weaponW = 4;
-    let pivotX: number, pivotY: number;
-    let baseAngle: number;
+/**
+ * Draw the equipped weapon as a tile sprite extending from the player's edge.
+ * Always visible (acts as facing indicator). Rotates through weaponAngle when swinging.
+ * Works correctly with the horizontal mirror transform already applied for WEST facing.
+ */
+function drawWeaponTileOverlay(
+  ctx: CanvasRenderingContext2D,
+  atlas: TileAtlas,
+  tileName: string,
+  entity: Entity,
+  sx: number,
+  sy: number,
+  cx: number,
+  cy: number,
+): void {
+  const { anim } = entity;
+  const weaponSize = 16; // draw weapon at 16×16 px
+  const REST_ANGLE = -0.15; // slight upward tilt when held at rest
 
-    switch (entity.facing) {
-      case Direction.EAST:
-        pivotX = sx + entity.width - 2;
-        pivotY = cy;
-        baseAngle = 0;
-        break;
-      case Direction.WEST:
-        pivotX = sx + 2;
-        pivotY = cy;
-        baseAngle = Math.PI;
-        break;
-      case Direction.SOUTH:
-        pivotX = cx;
-        pivotY = sy + entity.height - 2;
-        baseAngle = Math.PI / 2;
-        break;
-      case Direction.NORTH:
-        pivotX = cx;
-        pivotY = sy + 2;
-        baseAngle = -Math.PI / 2;
-        break;
-    }
+  let pivotX: number, pivotY: number, baseAngle: number;
 
-    ctx.save();
-    ctx.translate(pivotX, pivotY);
-    ctx.rotate(baseAngle + anim.weaponAngle);
-    ctx.fillStyle = '#cccccc';
-    ctx.fillRect(0, -weaponW / 2, weaponLen, weaponW);
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(weaponLen - 3, -weaponW / 2, 3, weaponW);
-    ctx.restore();
+  switch (entity.facing) {
+    case Direction.EAST:
+    case Direction.WEST:
+      // Mirror transform already flips WEST to look correct; use right-edge pivot for both
+      pivotX    = sx + entity.width - 2;
+      pivotY    = cy;
+      baseAngle = 0;
+      break;
+    case Direction.SOUTH:
+      pivotX    = cx;
+      pivotY    = sy + entity.height - 2;
+      baseAngle = Math.PI / 2;
+      break;
+    default: // NORTH
+      pivotX    = cx;
+      pivotY    = sy + 2;
+      baseAngle = -Math.PI / 2;
+      break;
   }
 
+  const angle = anim.weaponSwinging ? anim.weaponAngle : REST_ANGLE;
+
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  ctx.translate(pivotX, pivotY);
+  ctx.rotate(baseAngle + angle);
+  // Tile extends rightward from pivot, centered vertically
+  drawTile(ctx, atlas, tileName, 0, -weaponSize / 2, weaponSize, weaponSize);
+  ctx.restore();
+}
+
+function drawWeaponSwing(
+  ctx: CanvasRenderingContext2D,
+  entity: Entity,
+  sx: number,
+  sy: number,
+  cx: number,
+  cy: number,
+): void {
+  const weaponLen = 14;
+  const weaponW   = 4;
+  let pivotX: number, pivotY: number, baseAngle: number;
+
+  switch (entity.facing) {
+    case Direction.EAST:
+      pivotX = sx + entity.width - 2; pivotY = cy;           baseAngle = 0;           break;
+    case Direction.WEST:
+      pivotX = sx + 2;                pivotY = cy;           baseAngle = Math.PI;     break;
+    case Direction.SOUTH:
+      pivotX = cx;                    pivotY = sy + entity.height - 2; baseAngle = Math.PI / 2;  break;
+    default: // NORTH
+      pivotX = cx;                    pivotY = sy + 2;       baseAngle = -Math.PI / 2; break;
+  }
+
+  ctx.save();
+  ctx.translate(pivotX, pivotY);
+  ctx.rotate(baseAngle + entity.anim.weaponAngle);
+  ctx.fillStyle = '#cccccc';
+  ctx.fillRect(0, -weaponW / 2, weaponLen, weaponW);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(weaponLen - 3, -weaponW / 2, 3, weaponW);
   ctx.restore();
 }

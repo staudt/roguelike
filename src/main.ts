@@ -9,6 +9,7 @@ import { renderHUD, updateMessages } from './hud';
 import { ROLES } from './roles';
 import { PAL } from './palette';
 import { GameState, TileType, TILE_SIZE } from './types';
+import { TileAtlas, loadNetHackAtlas } from './tiles/atlas';
 
 // ── Canvas setup ──
 const canvas = document.getElementById('game') as HTMLCanvasElement;
@@ -28,6 +29,9 @@ function resize(): void {
 
 window.addEventListener('resize', resize);
 resize();
+
+// ── Tile atlas (loaded async at startup) ──
+let atlas: TileAtlas | null = null;
 
 // ── Game mode ──
 type GameMode = 'role_select' | 'playing';
@@ -217,10 +221,22 @@ function gameLoop(now: number): void {
   if (isKeyPressed('-')) zoomCamera(cam, -1, canvas.width, canvas.height);
 
   // Render
-  render(ctx, state, cam);
+  render(ctx, state, cam, atlas);
   renderHUD(ctx, state, canvas.width, canvas.height);
 
   requestAnimationFrame(gameLoop);
 }
 
-requestAnimationFrame(gameLoop);
+// ── Startup: load tile atlas then start the game loop ─────────────────────────
+(async () => {
+  ctx.fillStyle = PAL.bg;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = PAL.hudText;
+  ctx.font = '16px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('Loading tiles\u2026', canvas.width / 2, canvas.height / 2);
+
+  atlas = await loadNetHackAtlas();
+
+  requestAnimationFrame(gameLoop);
+})();
