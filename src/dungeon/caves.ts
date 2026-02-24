@@ -8,9 +8,9 @@ import { MapGeneratorConfig, MapGeneratorResult, StairsPlacement, Trap, TrapType
 // 3. Flood-fill to find largest connected region
 // 4. Identify "caverns" (open areas) as pseudo-rooms for spawning
 
-const OPEN_CHANCE = 0.55;    // initial chance of a cell being open
-const AUTOMATA_STEPS = 4;    // number of smoothing iterations
-const WALL_THRESHOLD = 5;    // become wall if this many neighbors are walls
+const OPEN_CHANCE = 0.44;    // initial chance of a cell being open
+const AUTOMATA_STEPS = 5;    // number of smoothing iterations
+const WALL_THRESHOLD = 5;    // become wall if this many neighbors are walls (5 = standard, ensures navigable corridors)
 const BORDER = 1;            // solid border around the map
 
 function createCaveMap(w: number, h: number): boolean[][] {
@@ -103,61 +103,62 @@ function floodFill(map: boolean[][], w: number, h: number): { regions: number[][
   return { regions, labels };
 }
 
-// Find pseudo-rooms: cluster open tiles into rectangular bounding boxes
-// We do this by sampling open areas and creating bounding rects
+// Find pseudo-rooms by dividing the map into a grid of cells.
+// Each cell that contains enough open tiles becomes a cavern (pseudo-room)
+// for enemy spawning and stair placement. Because the flood-fill step keeps
+// only one connected region, a BFS-with-visited approach would consume the
+// entire map on the first hit and return only 1 cavern; the grid approach
+// gives us many well-distributed caverns regardless.
 function findCaverns(map: boolean[][], w: number, h: number): Rect[] {
-  const visited: boolean[][] = [];
-  for (let y = 0; y < h; y++) {
-    visited.push(new Array(w).fill(false));
-  }
-
+  const CELL = 10; // grid cell size in tiles
+  const MIN_OPEN = 4; // cells with fewer open tiles are skipped
   const caverns: Rect[] = [];
-  const MIN_CAVERN = 16; // minimum open tiles to be a cavern
 
-  for (let y = 2; y < h - 2; y += 4) {
-    for (let x = 2; x < w - 2; x += 4) {
-      if (!map[y]![x] || visited[y]![x]) continue;
+  for (let gy = 0; gy * CELL < h - BORDER; gy++) {
+    for (let gx = 0; gx * CELL < w - BORDER; gx++) {
+      const x0 = Math.max(BORDER, gx * CELL);
+      const y0 = Math.max(BORDER, gy * CELL);
+      const x1 = Math.min(w - BORDER - 1, (gx + 1) * CELL - 1);
+      const y1 = Math.min(h - BORDER - 1, (gy + 1) * CELL - 1);
 
-      // BFS to find connected open area
-      const tiles: [number, number][] = [];
-      const queue: [number, number][] = [[x, y]];
-      visited[y]![x] = true;
-
-      while (queue.length > 0) {
-        const [cx, cy] = queue.pop()!;
-        tiles.push([cx, cy]);
-
-        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as [number, number][]) {
-          const nx = cx + dx;
-          const ny = cy + dy;
-          if (nx < 0 || nx >= w || ny < 0 || ny >= h) continue;
-          if (!map[ny]![nx] || visited[ny]![nx]) continue;
-          visited[ny]![nx] = true;
-          queue.push([nx, ny]);
+      let openCount = 0;
+      for (let y = y0; y <= y1; y++) {
+        for (let x = x0; x <= x1; x++) {
+          if (map[y]?.[x]) openCount++;
         }
       }
 
-      if (tiles.length < MIN_CAVERN) continue;
-
-      // Bounding rect
-      let minX = w, maxX = 0, minY = h, maxY = 0;
-      for (const [tx, ty] of tiles) {
-        if (tx < minX) minX = tx;
-        if (tx > maxX) maxX = tx;
-        if (ty < minY) minY = ty;
-        if (ty > maxY) maxY = ty;
-      }
-
-      // Shrink slightly for spawn safety
-      const rx = minX + 1;
-      const ry = minY + 1;
-      const rw = Math.max(2, maxX - minX - 1);
-      const rh = Math.max(2, maxY - minY - 1);
-      caverns.push({ x: rx, y: ry, w: rw, h: rh });
+      if (openCount < MIN_OPEN) continue;
+      caverns.push({ x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 });
     }
   }
 
   return caverns;
+}
+
+/**
+ * Find the most navigable open tile inside a cavern rect (highest count of
+ * open cardinal neighbors). Returns null if the cavern has no open tiles.
+ */
+function findBestOpenTile(
+  caveMap: boolean[][],
+  cavern: Rect,
+  w: number,
+  h: number,
+): { x: number; y: number } | null {
+  let best: { x: number; y: number } | null = null;
+  let bestScore = -1;
+  for (let y = cavern.y; y < cavern.y + cavern.h && y < h - BORDER; y++) {
+    for (let x = cavern.x; x < cavern.x + cavern.w && x < w - BORDER; x++) {
+      if (!caveMap[y]?.[x]) continue;
+      let score = 0;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as [number, number][]) {
+        if (caveMap[y + dy]?.[x + dx]) score++;
+      }
+      if (score > bestScore) { bestScore = score; best = { x, y }; }
+    }
+  }
+  return best;
 }
 
 function placeCaveTraps(caveMap: boolean[][], rooms: Rect[], startRoom: Rect): Trap[] {
@@ -239,44 +240,61 @@ export function generateCaves(config: MapGeneratorConfig): MapGeneratorResult {
     }
   }
 
-  // Pick a random start cavern, then place stairs in the farthest one
-  const startRoom = rooms[Math.floor(Math.random() * rooms.length)]!;
+  // Pick a random start cavern, then place stairs in the farthest one.
+  // Use findBestOpenTile so that both spawn and stairs land on actual floor.
+  let startCavern = rooms[Math.floor(Math.random() * rooms.length)]!;
 
-  let stairsRoom = rooms[0]!;
+  let stairsCavern = rooms[0]!;
   let maxDist = 0;
-  const scx = startRoom.x + startRoom.w / 2;
-  const scy = startRoom.y + startRoom.h / 2;
+  const scx = startCavern.x + startCavern.w / 2;
+  const scy = startCavern.y + startCavern.h / 2;
   for (const room of rooms) {
-    if (room === startRoom) continue;
+    if (room === startCavern) continue;
     const d = Math.abs(room.x + room.w / 2 - scx) + Math.abs(room.y + room.h / 2 - scy);
     if (d > maxDist) {
       maxDist = d;
-      stairsRoom = room;
+      stairsCavern = room;
     }
   }
 
-  // Place stairs — find a walkable tile in the stairs room
-  let stairsX = Math.floor(stairsRoom.x + stairsRoom.w / 2);
-  let stairsY = Math.floor(stairsRoom.y + stairsRoom.h / 2);
-  // Ensure the chosen tile is actually open
-  if (!caveMap[stairsY]?.[stairsX]) {
-    // Search nearby for an open tile
-    for (let dy = 0; dy <= 3; dy++) {
-      for (let dx = 0; dx <= 3; dx++) {
-        for (const offset of [[dx, dy], [-dx, dy], [dx, -dy], [-dx, -dy]]) {
-          const nx = stairsX + offset[0]!;
-          const ny = stairsY + offset[1]!;
-          if (nx >= 0 && nx < width && ny >= 0 && ny < height && caveMap[ny]![nx]) {
-            stairsX = nx;
-            stairsY = ny;
-            dy = 4; dx = 4; // break outer loops
-            break;
-          }
-        }
+  // Find the best (most navigable) open tile in each cavern.
+  // Redefine startRoom as a small rect centered on that tile so game.ts
+  // computes the correct pixel spawn position from the rect center.
+  const SPAWN_MARGIN = 3;
+  const startTile = findBestOpenTile(caveMap, startCavern, width, height)
+    ?? findBestOpenTile(caveMap, { x: BORDER, y: BORDER, w: width - BORDER * 2, h: height - BORDER * 2 }, width, height)!;
+  const startRoom: Rect = {
+    x: Math.max(BORDER, startTile.x - SPAWN_MARGIN),
+    y: Math.max(BORDER, startTile.y - SPAWN_MARGIN),
+    w: SPAWN_MARGIN * 2 + 1,
+    h: SPAWN_MARGIN * 2 + 1,
+  };
+
+  // Find the best open tile for the stairs, then ensure it is far enough from
+  // the spawn point. If the cave is tiny and all candidates are close, scan the
+  // whole map for the tile farthest from startTile.
+  const MIN_STAIR_SEP = 15; // minimum Manhattan tile distance between spawn and stairs
+  let candidateTile = findBestOpenTile(caveMap, stairsCavern, width, height) ?? startTile;
+  const sep = Math.abs(candidateTile.x - startTile.x) + Math.abs(candidateTile.y - startTile.y);
+  if (sep < MIN_STAIR_SEP) {
+    // Fall back to the open tile farthest from startTile across the whole map
+    let bestFarTile = candidateTile;
+    let bestFarDist = sep;
+    for (let y = BORDER; y < height - BORDER; y++) {
+      for (let x = BORDER; x < width - BORDER; x++) {
+        if (!caveMap[y]?.[x]) continue;
+        if (x === startTile.x && y === startTile.y) continue;
+        const d = Math.abs(x - startTile.x) + Math.abs(y - startTile.y);
+        if (d > bestFarDist) { bestFarDist = d; bestFarTile = { x, y }; }
       }
     }
+    candidateTile = bestFarTile;
   }
+  const stairsX = candidateTile.x;
+  const stairsY = candidateTile.y;
   tiles[stairsY]![stairsX]!.type = TileType.STAIRS_DOWN;
+
+  const stairsRoom: Rect = stairsCavern;
 
   const stairs: StairsPlacement[] = [
     { room: stairsRoom, type: 'down' },

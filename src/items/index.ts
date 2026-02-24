@@ -1,9 +1,11 @@
 import { ItemDef, WeaponDef } from './defs';
 import { WEAPONS } from './weapons';
+import { CORPSES } from './corpses';
 
 // ── All item definitions ────────────────────────────────
 const ALL_ITEMS: ItemDef[] = [
   ...WEAPONS,
+  ...CORPSES,
 ];
 
 // ── Registry (built at module load time) ────────────────
@@ -34,4 +36,8 @@ export function getAllItems(): ItemDef[] {
 
 export function getItemsByCategory(category: string): ItemDef[] {
   return ALL_ITEMS.filter(d => d.category === category);
+}
+
+export function getAllWeapons(): WeaponDef[] {
+  return WEAPONS;
 }

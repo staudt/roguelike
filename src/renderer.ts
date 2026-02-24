@@ -19,9 +19,27 @@ import {
   TERRAIN_TILE_NAMES,
   MINES_WALL_TILE_NAME,
   TRAP_TILE_NAMES,
+  CORPSE_TILE_NAME,
+  CATEGORY_TILE_NAMES,
 } from './tiles/mapping';
+import { getItemDef } from './items';
 import { StatusEffectType } from './status';
 import { TrapType } from './dungeon/types';
+import { SIZE_SMALL, SIZE_MEDIUM, SIZE_LARGE, SIZE_HUGE } from './tags';
+
+// ── Visual size by size tag ───────────────────────────────────────────────────
+// Returns the visual pixel dimensions for a monster.
+// Sprites are ground-anchored: the bottom of the visual rect aligns with the
+// bottom of the gameplay hitbox, so taller monsters grow upward into wall tiles,
+// giving a pseudo-3/4 view impression.
+
+function sizeTagToVisual(tags: readonly string[]): { w: number; h: number } {
+  if (tags.includes(SIZE_HUGE))   return { w: 54, h: 68 };
+  if (tags.includes(SIZE_LARGE))  return { w: 40, h: 52 };
+  if (tags.includes(SIZE_MEDIUM)) return { w: 28, h: 36 };
+  if (tags.includes(SIZE_SMALL))  return { w: 20, h: 22 };
+  /* SIZE_TINY or unknown */      return { w: 14, h: 14 };
+}
 
 // ── Biome palettes (fallback colored-rect rendering) ─────────────────────────
 
@@ -163,6 +181,39 @@ export function render(
     }
   }
 
+  // ── Draw ground items ──
+  for (const gi of state.groundItems) {
+    const gx = gi.x - cam.x;
+    const gy = gi.y - cam.y;
+    // Cull items outside the viewport
+    if (gx < -TILE_SIZE || gx > cam.width + TILE_SIZE || gy < -TILE_SIZE || gy > cam.height + TILE_SIZE) continue;
+    // Only draw if the tile is visible
+    const gtx = Math.floor(gi.x / TILE_SIZE);
+    const gty = Math.floor(gi.y / TILE_SIZE);
+    const gtile = tiles[gty]?.[gtx];
+    if (!gtile?.visible) continue;
+
+    const def = getItemDef(gi.item.defId);
+    let tileName: string | undefined;
+    if (def.category === 'corpse') {
+      tileName = CORPSE_TILE_NAME;
+    } else if (def.category === 'weapon') {
+      tileName = WEAPON_TILE_NAMES[gi.item.defId];
+    } else {
+      tileName = CATEGORY_TILE_NAMES[def.category];
+    }
+
+    const drawn = atlas && tileName
+      ? drawTile(ctx, atlas, tileName, gx - TILE_SIZE / 2, gy - TILE_SIZE / 2, TILE_SIZE, TILE_SIZE)
+      : false;
+
+    if (!drawn) {
+      // Fallback: small colored square
+      ctx.fillStyle = def.category === 'corpse' ? '#996644' : '#ccaa44';
+      ctx.fillRect(gx - 6, gy - 6, 12, 12);
+    }
+  }
+
   // ── Draw enemies ──
   for (const enemy of enemies) {
     if (!enemy.alive) continue;
@@ -196,6 +247,28 @@ export function render(
     const dty = Math.floor((dog.y + dog.height / 2) / TILE_SIZE);
     if (dtx >= 0 && dty >= 0 && dty < tiles.length && dtx < (tiles[0]?.length ?? 0) && tiles[dty]![dtx]!.visible) {
       drawDogEntity(ctx, atlas, dog, cam);
+
+      // Dog status effect overlay
+      if (dog.statusEffects.length > 0) {
+        const dox = dog.x - cam.x;
+        const doy = dog.y - cam.y;
+        const now = Date.now();
+        for (const eff of dog.statusEffects) {
+          let color: string;
+          let pulse: number;
+          if (eff.type === StatusEffectType.PARALYZED || eff.type === StatusEffectType.IN_PIT) {
+            color = '#4488ff';
+            pulse = 0.25 + Math.abs(Math.sin(now / 180)) * 0.3;
+          } else {
+            color = '#33cc44';
+            pulse = 0.25 + Math.abs(Math.sin(now / 120)) * 0.3;
+          }
+          ctx.globalAlpha = pulse;
+          ctx.fillStyle = color;
+          ctx.fillRect(dox, doy, dog.width, dog.height);
+          ctx.globalAlpha = 1;
+        }
+      }
 
       const dsx = dog.x - cam.x;
       const dsy = dog.y - cam.y - 6;
@@ -330,16 +403,24 @@ function drawEntitySprite(
   cam: Camera,
   peaceful = false,
   weaponTileName?: string,
+  visualW = entity.width,
+  visualH = entity.height,
 ): void {
   const { anim } = entity;
-  const sx  = entity.x - cam.x;
-  const sy  = entity.y - cam.y;
-  const cx  = sx + entity.width  / 2;
-  const cy  = sy + entity.height / 2;
+  const sx = entity.x - cam.x;
+  const sy = entity.y - cam.y;
+
+  // Ground-anchored: bottom of visual sprite = bottom of gameplay hitbox.
+  // Taller sprites grow upward, overlapping the wall tile above for a 3/4-view feel.
+  const vsx = sx + (entity.width  - visualW) / 2;
+  const vsy = sy +  entity.height - visualH;
+
+  const cx = sx + entity.width / 2;  // horizontal center (= vsx + visualW/2)
+  const cy = vsy + visualH / 2;      // visual vertical center
 
   ctx.save();
 
-  // Squash/stretch bounce
+  // Squash/stretch bounce — anchored at entity bottom (ground level)
   if (anim.bounceScaleY !== 0) {
     const scaleY  = 1 + anim.bounceScaleY;
     const scaleX  = 1 - anim.bounceScaleY * 0.5;
@@ -356,38 +437,55 @@ function drawEntitySprite(
     ctx.translate(-cx, -cy);
   }
 
+  // Peaceful glow — flat ellipse at feet, like a ground halo
+  if (peaceful) {
+    const pulse = 0.25 + Math.abs(Math.sin(Date.now() / 600)) * 0.25;
+    ctx.globalAlpha = pulse;
+    ctx.fillStyle = PAL.peacefulIndicator;
+    ctx.beginPath();
+    ctx.ellipse(
+      vsx + visualW / 2,  // center x
+      vsy + visualH,      // at ground level (feet)
+      visualW / 2 + 3,    // x radius — matches sprite width
+      4,                  // y radius — flat disc
+      0, 0, Math.PI * 2,
+    );
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
   let usedSprite = false;
 
   if (atlas && tileName) {
-    usedSprite = drawTile(ctx, atlas, tileName, sx, sy, entity.width, entity.height);
+    usedSprite = drawTile(ctx, atlas, tileName, vsx, vsy, visualW, visualH);
   }
 
   if (!usedSprite) {
     // Colored rectangle fallback
     ctx.fillStyle = entity.color;
-    ctx.fillRect(sx, sy, entity.width, entity.height);
+    ctx.fillRect(vsx, vsy, visualW, visualH);
 
     ctx.strokeStyle = peaceful ? PAL.peacefulIndicator : 'rgba(0,0,0,0.3)';
     ctx.lineWidth   = peaceful ? 1.5 : 1;
-    ctx.strokeRect(sx + 0.5, sy + 0.5, entity.width - 1, entity.height - 1);
+    ctx.strokeRect(vsx + 0.5, vsy + 0.5, visualW - 1, visualH - 1);
 
-    drawEyes(ctx, entity, sx, sy);
+    drawEyes(ctx, entity, vsx, vsy, visualW, visualH);
   }
 
   // Hit flash overlay
   if (anim.hitFlashTimer > 0) {
     ctx.globalAlpha = 0.65;
     ctx.fillStyle   = '#ffffff';
-    ctx.fillRect(sx, sy, entity.width, entity.height);
+    ctx.fillRect(vsx, vsy, visualW, visualH);
     ctx.globalAlpha = 1;
   }
 
   // Weapon overlay — tile sprite (always shown as held, swings on attack)
   // or colored-rect fallback (only shown when swinging)
   if (weaponTileName && atlas) {
-    drawWeaponTileOverlay(ctx, atlas, weaponTileName, entity, sx, sy, cx, cy);
+    drawWeaponTileOverlay(ctx, atlas, weaponTileName, entity, vsx, vsy, cx, cy);
   } else if (anim.weaponSwinging) {
-    drawWeaponSwing(ctx, entity, sx, sy, cx, cy);
+    drawWeaponSwing(ctx, entity, vsx, vsy, cx, cy);
   }
 
   ctx.restore();
@@ -400,7 +498,8 @@ function drawEnemyEntity(
   cam: Camera,
 ): void {
   const tileName = MONSTER_TILE_NAMES[enemy.def.id];
-  drawEntitySprite(ctx, atlas, tileName, enemy, cam, !enemy.hostile);
+  const { w, h } = sizeTagToVisual(enemy.def.tags);
+  drawEntitySprite(ctx, atlas, tileName, enemy, cam, !enemy.hostile, undefined, w, h);
 }
 
 function drawDogEntity(
@@ -410,7 +509,7 @@ function drawDogEntity(
   cam: Camera,
 ): void {
   const tileName = DOG_FORM_TILE_NAMES[dog.form];
-  drawEntitySprite(ctx, atlas, tileName, dog, cam);
+  drawEntitySprite(ctx, atlas, tileName, dog, cam, true);
 }
 
 function drawPlayerEntity(
@@ -432,36 +531,40 @@ function drawEyes(
   entity: Entity,
   sx: number,
   sy: number,
+  w: number,
+  h: number,
 ): void {
   ctx.fillStyle = '#ffffff';
-  const eyeSize    = 3;
-  const eyeSpacing = 5;
+  const eyeSize    = Math.max(2, Math.round(w / 10));
+  const eyeSpacing = Math.max(3, Math.round(w / 6));
   let ex1: number, ey1: number, ex2: number, ey2: number;
+  const hcx = sx + w / 2;
+  const hcy = sy + h / 2;
 
   switch (entity.facing) {
     case Direction.SOUTH:
-      ex1 = sx + entity.width / 2 - eyeSpacing;
-      ey1 = sy + entity.height / 2 + 2;
-      ex2 = sx + entity.width / 2 + eyeSpacing - eyeSize;
+      ex1 = hcx - eyeSpacing;
+      ey1 = hcy + 2;
+      ex2 = hcx + eyeSpacing - eyeSize;
       ey2 = ey1;
       break;
     case Direction.NORTH:
-      ex1 = sx + entity.width / 2 - eyeSpacing;
-      ey1 = sy + entity.height / 2 - 5;
-      ex2 = sx + entity.width / 2 + eyeSpacing - eyeSize;
+      ex1 = hcx - eyeSpacing;
+      ey1 = hcy - 5;
+      ex2 = hcx + eyeSpacing - eyeSize;
       ey2 = ey1;
       break;
     case Direction.WEST:
-      ex1 = sx + entity.width / 2 - 6;
-      ey1 = sy + entity.height / 2 - eyeSpacing;
+      ex1 = hcx - eyeSpacing - eyeSize;
+      ey1 = hcy - eyeSpacing;
       ex2 = ex1;
-      ey2 = sy + entity.height / 2 + eyeSpacing - eyeSize;
+      ey2 = hcy + eyeSpacing - eyeSize;
       break;
     default: // EAST
-      ex1 = sx + entity.width / 2 + 3;
-      ey1 = sy + entity.height / 2 - eyeSpacing;
+      ex1 = hcx + eyeSpacing - eyeSize;
+      ey1 = hcy - eyeSpacing;
       ex2 = ex1;
-      ey2 = sy + entity.height / 2 + eyeSpacing - eyeSize;
+      ey2 = hcy + eyeSpacing - eyeSize;
       break;
   }
   ctx.fillRect(ex1, ey1, eyeSize, eyeSize);
@@ -469,86 +572,93 @@ function drawEyes(
 }
 
 /**
- * Draw the equipped weapon as a tile sprite extending from the player's edge.
- * Always visible (acts as facing indicator). Rotates through weaponAngle when swinging.
- * Works correctly with the horizontal mirror transform already applied for WEST facing.
+ * Draw the equipped weapon as a tile sprite pointing in the entity's aimAngle direction.
+ * Always visible at rest; rotates through weaponAngle arc when swinging.
+ * Undoes the horizontal mirror transform before applying the world-space aim angle.
  */
 function drawWeaponTileOverlay(
   ctx: CanvasRenderingContext2D,
   atlas: TileAtlas,
   tileName: string,
   entity: Entity,
-  sx: number,
-  sy: number,
+  _sx: number,
+  _sy: number,
   cx: number,
   cy: number,
 ): void {
   const { anim } = entity;
-  const weaponSize = 16; // draw weapon at 16×16 px
-  const REST_ANGLE = -0.15; // slight upward tilt when held at rest
-
-  let pivotX: number, pivotY: number, baseAngle: number;
-
-  switch (entity.facing) {
-    case Direction.EAST:
-    case Direction.WEST:
-      // Mirror transform already flips WEST to look correct; use right-edge pivot for both
-      pivotX    = sx + entity.width - 2;
-      pivotY    = cy;
-      baseAngle = 0;
-      break;
-    case Direction.SOUTH:
-      pivotX    = cx;
-      pivotY    = sy + entity.height - 2;
-      baseAngle = Math.PI / 2;
-      break;
-    default: // NORTH
-      pivotX    = cx;
-      pivotY    = sy + 2;
-      baseAngle = -Math.PI / 2;
-      break;
-  }
-
-  const angle = anim.weaponSwinging ? anim.weaponAngle : REST_ANGLE;
+  const weaponSize = 16;
+  const REST_ANGLE = -0.15;
+  const swingOffset = anim.weaponSwinging ? anim.weaponAngle : REST_ANGLE;
 
   ctx.save();
   ctx.imageSmoothingEnabled = false;
-  ctx.translate(pivotX, pivotY);
-  ctx.rotate(baseAngle + angle);
-  // Tile extends rightward from pivot, centered vertically
-  drawTile(ctx, atlas, tileName, 0, -weaponSize / 2, weaponSize, weaponSize);
+
+  // Undo the horizontal mirror applied for west-facing so aimAngle stays world-space
+  if (!anim.facingRight) {
+    ctx.translate(cx, cy);
+    ctx.scale(-1, 1);
+    ctx.translate(-cx, -cy);
+  }
+
+  // Rotate around entity center in aim direction, then draw tile extending from edge
+  ctx.translate(cx, cy);
+  ctx.rotate(entity.aimAngle + swingOffset);
+  drawTile(ctx, atlas, tileName, entity.width / 2 - 2, -weaponSize / 2, weaponSize, weaponSize);
   ctx.restore();
 }
 
 function drawWeaponSwing(
   ctx: CanvasRenderingContext2D,
   entity: Entity,
-  sx: number,
-  sy: number,
+  _sx: number,
+  _sy: number,
   cx: number,
   cy: number,
 ): void {
   const weaponLen = 14;
   const weaponW   = 4;
-  let pivotX: number, pivotY: number, baseAngle: number;
-
-  switch (entity.facing) {
-    case Direction.EAST:
-      pivotX = sx + entity.width - 2; pivotY = cy;           baseAngle = 0;           break;
-    case Direction.WEST:
-      pivotX = sx + 2;                pivotY = cy;           baseAngle = Math.PI;     break;
-    case Direction.SOUTH:
-      pivotX = cx;                    pivotY = sy + entity.height - 2; baseAngle = Math.PI / 2;  break;
-    default: // NORTH
-      pivotX = cx;                    pivotY = sy + 2;       baseAngle = -Math.PI / 2; break;
-  }
+  const { anim } = entity;
 
   ctx.save();
-  ctx.translate(pivotX, pivotY);
-  ctx.rotate(baseAngle + entity.anim.weaponAngle);
+
+  // Undo horizontal mirror so aimAngle stays world-space
+  if (!anim.facingRight) {
+    ctx.translate(cx, cy);
+    ctx.scale(-1, 1);
+    ctx.translate(-cx, -cy);
+  }
+
+  ctx.translate(cx, cy);
+  ctx.rotate(entity.aimAngle + anim.weaponAngle);
   ctx.fillStyle = '#cccccc';
-  ctx.fillRect(0, -weaponW / 2, weaponLen, weaponW);
+  ctx.fillRect(entity.width / 2 - 2, -weaponW / 2, weaponLen, weaponW);
   ctx.fillStyle = '#ffffff';
-  ctx.fillRect(weaponLen - 3, -weaponW / 2, 3, weaponW);
+  ctx.fillRect(entity.width / 2 - 2 + weaponLen - 3, -weaponW / 2, 3, weaponW);
+  ctx.restore();
+}
+
+// ── Crosshair ─────────────────────────────────────────────────────────────────
+
+export function renderCrosshair(
+  ctx: CanvasRenderingContext2D,
+  mouseX: number,
+  mouseY: number,
+): void {
+  const size = 10;
+  const gap  = 3;
+
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+  ctx.lineWidth   = 1.5;
+  ctx.lineCap     = 'round';
+
+  ctx.beginPath();
+  ctx.moveTo(mouseX - size, mouseY); ctx.lineTo(mouseX - gap, mouseY);
+  ctx.moveTo(mouseX + gap,  mouseY); ctx.lineTo(mouseX + size, mouseY);
+  ctx.moveTo(mouseX, mouseY - size); ctx.lineTo(mouseX, mouseY - gap);
+  ctx.moveTo(mouseX, mouseY + gap);  ctx.lineTo(mouseX, mouseY + size);
+  ctx.stroke();
+
   ctx.restore();
 }

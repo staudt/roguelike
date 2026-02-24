@@ -2,7 +2,7 @@ import { DamageType } from '../types';
 
 // ── Item Categories ─────────────────────────────────────
 
-export type ItemCategory = 'weapon' | 'armor' | 'consumable';
+export type ItemCategory = 'weapon' | 'armor' | 'consumable' | 'corpse';
 
 // ── Base Item Definition ────────────────────────────────
 // All items share these fields. Category-specific fields

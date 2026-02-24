@@ -48,6 +48,8 @@ export const SPECIAL_MONSTERS: MonsterDef[] = [
       chance: 1.0,
       duration: 3000,
     },
+    // Rare — eating eventually grants telepathy (future mechanic)
+    drops: [{ itemId: 'corpse_floating_eye', chance: 0.05 }],
   },
 
   // ── Lichen ──────────────────────────────────────────────
@@ -131,6 +133,13 @@ export const SPECIAL_MONSTERS: MonsterDef[] = [
       contactCooldown: 600,
       spawnFloorMin: 2,
       spawnFloorMax: 10,
+    },
+    // Striking a yellow light with melee always blinds — even the killing blow
+    onPlayerMeleeHit: {
+      type: StatusEffectType.BLINDED,
+      chance: 1.0,
+      duration: 6000,
+      alwaysTriggers: true,
     },
     onPlayerContactHit: {
       type: StatusEffectType.BLINDED,

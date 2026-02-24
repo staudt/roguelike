@@ -1,14 +1,17 @@
-import { createGameState, descendStairs, ascendStairs } from './game';
-import { initInput, isKeyPressed } from './input';
+import { createGameState, descendStairs, ascendStairs, debugTeleport } from './game';
+import { initInput, isKeyPressed, getMousePos, isMouseButtonPressed } from './input';
+import { addItem } from './inventory';
+import { getItemDef } from './items';
 import { createCamera, updateCamera, zoomCamera } from './camera';
 import { updateEntities } from './entities';
 import { updateCombat, resetCombatState } from './combat';
 import { computeFOV } from './fov';
-import { render } from './renderer';
+import { render, renderCrosshair } from './renderer';
 import { renderHUD, updateMessages } from './hud';
 import { ROLES } from './roles';
 import { PAL } from './palette';
 import { GameState, TileType, TILE_SIZE } from './types';
+import { BRANCHES } from './dungeon/types';
 import { StatusEffectType } from './status';
 import { TileAtlas, loadNetHackAtlas } from './tiles/atlas';
 
@@ -17,7 +20,8 @@ const canvas = document.getElementById('game') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
 
 // ── Init ──
-initInput();
+initInput(canvas);
+canvas.style.cursor = 'none';
 
 let cam = createCamera(window.innerWidth, window.innerHeight);
 
@@ -39,6 +43,99 @@ type GameMode = 'role_select' | 'playing';
 let mode: GameMode = 'role_select';
 let selectedRoleIndex = 0;
 let state: GameState | null = null;
+
+// ── Debug panel ──
+let debugOpen = false;
+
+// Each button is { branch, floor, x, y, w, h } — rebuilt each render frame
+interface DebugBtn { branch: string; floor: number; x: number; y: number; w: number; h: number }
+let debugBtns: DebugBtn[] = [];
+
+function renderDebugPanel(): void {
+  const PAD = 12;
+  const BTN = 26;
+  const GAP = 4;
+  const COLS = 10;
+
+  // Measure total height needed
+  let totalH = PAD * 2 + 20; // header
+  for (const b of BRANCHES) {
+    const rows = Math.ceil(b.floors / COLS);
+    totalH += 20 + rows * (BTN + GAP) + PAD;
+  }
+
+  const panelW = PAD * 2 + COLS * (BTN + GAP) - GAP;
+  const px = 20;
+  const py = 20;
+
+  // Panel background
+  ctx.fillStyle = 'rgba(10,10,20,0.92)';
+  ctx.fillRect(px, py, panelW, totalH);
+  ctx.strokeStyle = '#44ff88';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(px + 0.5, py + 0.5, panelW - 1, totalH - 1);
+
+  ctx.textAlign = 'left';
+  let cy = py + PAD;
+
+  // Header
+  ctx.font = 'bold 13px monospace';
+  ctx.fillStyle = '#44ff88';
+  ctx.fillText('DEBUG TELEPORT', px + PAD, cy + 12);
+  ctx.font = '11px monospace';
+  ctx.fillStyle = '#888';
+  ctx.fillText('` to close', px + panelW - PAD - 60, cy + 12);
+  cy += 20 + GAP;
+
+  debugBtns = [];
+
+  for (const branch of BRANCHES) {
+    // Branch label
+    ctx.font = 'bold 11px monospace';
+    ctx.fillStyle = '#cccccc';
+    ctx.fillText(branch.name, px + PAD, cy + 10);
+    cy += 18;
+
+    for (let f = 1; f <= branch.floors; f++) {
+      const col = (f - 1) % COLS;
+      const row = Math.floor((f - 1) / COLS);
+      const bx = px + PAD + col * (BTN + GAP);
+      const by = cy + row * (BTN + GAP);
+
+      const isActive = state?.progress.branch === branch.id && state?.progress.floor === f;
+
+      ctx.fillStyle = isActive ? '#44ff88' : 'rgba(60,60,80,0.9)';
+      ctx.fillRect(bx, by, BTN, BTN);
+      ctx.strokeStyle = isActive ? '#44ff88' : '#555';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(bx + 0.5, by + 0.5, BTN - 1, BTN - 1);
+
+      ctx.font = '10px monospace';
+      ctx.fillStyle = isActive ? '#000' : '#ccc';
+      ctx.textAlign = 'center';
+      ctx.fillText(String(f), bx + BTN / 2, by + BTN / 2 + 4);
+      ctx.textAlign = 'left';
+
+      debugBtns.push({ branch: branch.id, floor: f, x: bx, y: by, w: BTN, h: BTN });
+    }
+
+    const rows = Math.ceil(branch.floors / COLS);
+    cy += rows * (BTN + GAP) + PAD;
+  }
+}
+
+function handleDebugClick(mx: number, my: number): void {
+  if (!state) return;
+  for (const btn of debugBtns) {
+    if (mx >= btn.x && mx <= btn.x + btn.w && my >= btn.y && my <= btn.y + btn.h) {
+      resetCombatState();
+      debugTeleport(state, btn.branch, btn.floor);
+      cam.x = state.player.x + state.player.width / 2 - cam.width / 2;
+      cam.y = state.player.y + state.player.height / 2 - cam.height / 2;
+      return;
+    }
+  }
+}
 
 // ── Role selection screen ──
 function renderRoleSelect(): void {
@@ -195,9 +292,34 @@ function gameLoop(now: number): void {
       requestAnimationFrame(gameLoop);
       return;
     }
+
+    // Press E to pick up item on current tile
+    if (isKeyPressed('e')) {
+      const idx = state.groundItems.findIndex(gi => {
+        return Math.floor(gi.x / TILE_SIZE) === ptx &&
+               Math.floor(gi.y / TILE_SIZE) === pty;
+      });
+      if (idx !== -1) {
+        const gi = state.groundItems[idx]!;
+        const def = getItemDef(gi.item.defId);
+        const added = addItem(state.inventory, gi.item);
+        if (added) {
+          state.groundItems.splice(idx, 1);
+          state.messages.push({ text: `You pick up the ${def.name}.`, timer: 4000 });
+        } else {
+          state.messages.push({ text: 'Your pack is full.', timer: 3000 });
+        }
+      }
+    }
   }
 
   if (!state.gameOver) {
+    // Update player aim angle from mouse position (screen → world-space angle)
+    const mouse = getMousePos();
+    const playerScreenX = (state.player.x + state.player.width / 2 - cam.x) * cam.scale;
+    const playerScreenY = (state.player.y + state.player.height / 2 - cam.y) * cam.scale;
+    state.player.aimAngle = Math.atan2(mouse.y - playerScreenY, mouse.x - playerScreenX);
+
     // Update
     updateEntities(state, dt);
     updateCombat(state, dt);
@@ -222,9 +344,29 @@ function gameLoop(now: number): void {
   if (isKeyPressed('=')) zoomCamera(cam, 1, canvas.width, canvas.height);
   if (isKeyPressed('-')) zoomCamera(cam, -1, canvas.width, canvas.height);
 
+  // Debug panel toggle (backtick — avoids browser shortcut conflicts)
+  if (isKeyPressed('`')) debugOpen = !debugOpen;
+
   // Render
   render(ctx, state, cam, atlas);
   renderHUD(ctx, state, canvas.width, canvas.height);
+
+  // Debug panel (drawn over HUD, under crosshair)
+  if (debugOpen) {
+    canvas.style.cursor = 'default';
+    renderDebugPanel();
+    if (isMouseButtonPressed(0)) {
+      const mouse = getMousePos();
+      handleDebugClick(mouse.x, mouse.y);
+    }
+  } else {
+    canvas.style.cursor = 'none';
+    // Crosshair drawn last so it's always on top
+    if (state && !state.gameOver) {
+      const mouse = getMousePos();
+      renderCrosshair(ctx, mouse.x, mouse.y);
+    }
+  }
 
   requestAnimationFrame(gameLoop);
 }

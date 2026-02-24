@@ -39,6 +39,7 @@ export const UNDEAD_MONSTERS: MonsterDef[] = [
       CAN_HEAR,
       RARITY_COMMON,
       PACK_SPAWN,
+      'branch:main',
     ],
     props: {
       contactCooldown: 1000,
@@ -47,6 +48,7 @@ export const UNDEAD_MONSTERS: MonsterDef[] = [
       groupSizeMin: 1,
       groupSizeMax: 3,
     },
+    drops: [{ itemId: 'corpse_zombie', chance: 0.65 }],
   },
 
   // ── Skeleton ────────────────────────────────────────────
@@ -69,6 +71,7 @@ export const UNDEAD_MONSTERS: MonsterDef[] = [
       AI_PATROL, AI_CHASE,
       DEAF,
       RARITY_COMMON,
+      'branch:main',
     ],
     props: {
       contactCooldown: 800,
@@ -77,6 +80,7 @@ export const UNDEAD_MONSTERS: MonsterDef[] = [
       groupSizeMin: 1,
       groupSizeMax: 2,
     },
+    drops: [{ itemId: 'corpse_skeleton', chance: 0.20 }],
   },
 
   // ── Ghoul ───────────────────────────────────────────────
@@ -99,12 +103,14 @@ export const UNDEAD_MONSTERS: MonsterDef[] = [
       AI_CHASE,
       CAN_HEAR,
       RARITY_UNCOMMON,
+      'branch:main',
     ],
     props: {
       contactCooldown: 900,
       spawnFloorMin: 3,
       spawnFloorMax: 12,
     },
+    drops: [{ itemId: 'corpse_ghoul', chance: 0.70 }],
   },
 
   // ── Wraith ──────────────────────────────────────────────
@@ -128,6 +134,7 @@ export const UNDEAD_MONSTERS: MonsterDef[] = [
       AI_CHASE,
       CAN_HEAR,
       RARITY_RARE,
+      'branch:main',
     ],
     props: {
       contactCooldown: 1200,
@@ -157,11 +164,13 @@ export const UNDEAD_MONSTERS: MonsterDef[] = [
       CAN_HEAR,
       SIZE_MEDIUM,
       RARITY_RARE,
+      'branch:main',
     ],
     props: {
       contactCooldown: 1200,
       spawnFloorMin: 8,
       spawnFloorMax: 20,
     },
+    drops: [{ itemId: 'corpse_mummy', chance: 0.70 }],
   },
 ];

@@ -39,11 +39,14 @@ export function updatePlayer(player: Entity, tiles: TileMap, dt: number, statusE
   player.vx = dx * PLAYER_SPEED * speedMult;
   player.vy = dy * PLAYER_SPEED * speedMult;
 
-  // Update facing direction
-  if (dx > 0) player.facing = Direction.EAST;
-  else if (dx < 0) player.facing = Direction.WEST;
-  if (dy > 0) player.facing = Direction.SOUTH;
-  else if (dy < 0) player.facing = Direction.NORTH;
+  // Update facing from aim angle (driven by mouse position, set by main.ts each frame)
+  const aimCos = Math.cos(player.aimAngle);
+  const aimSin = Math.sin(player.aimAngle);
+  if (Math.abs(aimCos) >= Math.abs(aimSin)) {
+    player.facing = aimCos >= 0 ? Direction.EAST : Direction.WEST;
+  } else {
+    player.facing = aimSin >= 0 ? Direction.SOUTH : Direction.NORTH;
+  }
 
   // Move with collision (resolve X and Y separately for wall sliding)
   const newX = player.x + player.vx * dt;

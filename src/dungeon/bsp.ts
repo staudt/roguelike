@@ -87,21 +87,35 @@ function carveCorridor(tiles: TileMap, x1: number, y1: number, x2: number, y2: n
   let x = x1;
   let y = y1;
 
+  // Carve horizontal leg first, then vertical (L-shaped)
   while (x !== x2) {
-    if (y >= 0 && y < tiles.length && x >= 0 && x < tiles[0]!.length) {
-      if (tiles[y]![x]!.type === TileType.WALL) {
-        tiles[y]![x]!.type = TileType.CORRIDOR;
-      }
-    }
+    if (tiles[y]?.[x]?.type === TileType.WALL) tiles[y]![x]!.type = TileType.CORRIDOR;
     x += x < x2 ? 1 : -1;
   }
   while (y !== y2) {
-    if (y >= 0 && y < tiles.length && x >= 0 && x < tiles[0]!.length) {
-      if (tiles[y]![x]!.type === TileType.WALL) {
-        tiles[y]![x]!.type = TileType.CORRIDOR;
-      }
-    }
+    if (tiles[y]?.[x]?.type === TileType.WALL) tiles[y]![x]!.type = TileType.CORRIDOR;
     y += y < y2 ? 1 : -1;
+  }
+  // Carve the final destination tile (loop stops one step short)
+  if (tiles[y]?.[x]?.type === TileType.WALL) tiles[y]![x]!.type = TileType.CORRIDOR;
+}
+
+/**
+ * Return the wall tile just outside the room boundary facing toward `target`.
+ * Corridors start/end here so they never traverse room interiors.
+ */
+function getRoomEdgePoint(room: Rect, target: { x: number; y: number }): { x: number; y: number } {
+  const cx = room.x + Math.floor(room.w / 2);
+  const cy = room.y + Math.floor(room.h / 2);
+  const dx = target.x - cx;
+  const dy = target.y - cy;
+
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    // Exit through left or right wall
+    return { x: dx >= 0 ? room.x + room.w : room.x - 1, y: cy };
+  } else {
+    // Exit through top or bottom wall
+    return { x: cx, y: dy >= 0 ? room.y + room.h : room.y - 1 };
   }
 }
 
@@ -110,11 +124,13 @@ function connectRooms(tiles: TileMap, node: BSPNode): void {
     const roomA = getRoom(node.left);
     const roomB = getRoom(node.right);
     if (roomA && roomB) {
-      const ax = Math.floor(roomA.x + roomA.w / 2);
-      const ay = Math.floor(roomA.y + roomA.h / 2);
-      const bx = Math.floor(roomB.x + roomB.w / 2);
-      const by = Math.floor(roomB.y + roomB.h / 2);
-      carveCorridor(tiles, ax, ay, bx, by);
+      const acx = Math.floor(roomA.x + roomA.w / 2);
+      const acy = Math.floor(roomA.y + roomA.h / 2);
+      const bcx = Math.floor(roomB.x + roomB.w / 2);
+      const bcy = Math.floor(roomB.y + roomB.h / 2);
+      const aEdge = getRoomEdgePoint(roomA, { x: bcx, y: bcy });
+      const bEdge = getRoomEdgePoint(roomB, { x: acx, y: acy });
+      carveCorridor(tiles, aEdge.x, aEdge.y, bEdge.x, bEdge.y);
     }
   }
   if (node.left) connectRooms(tiles, node.left);

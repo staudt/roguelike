@@ -1,12 +1,11 @@
 import {
   Attack,
   Entity,
-  Direction,
   DamageType,
   GameState,
   KNOCKBACK_SPEED,
 } from './types';
-import { isKeyPressed } from './input';
+import { isMouseButtonDown } from './input';
 import {
   KNOCKBACK_BLUNT,
   KNOCKBACK_SLASH,
@@ -18,7 +17,8 @@ import {
 } from './config';
 import { computeXPReward, checkLevelUp, monsterXPForKill, checkMonsterLevelUp } from './progression';
 import { WeaponDef } from './items/defs';
-import { getWeaponDef } from './items';
+import { getWeaponDef, getItemDef } from './items';
+import { createItemInstance } from './inventory';
 import { getSTRDamageBonus, getDEXSpeedMult, getCONHPBonus } from './attributes';
 import { getRoleDef } from './roles';
 import { triggerHitFlash, triggerWeaponSwing } from './animation';
@@ -160,7 +160,7 @@ export function updateCombat(state: GameState, dt: number): void {
     e => e.type === StatusEffectType.PARALYZED || e.type === StatusEffectType.IN_PIT,
   );
 
-  if (!immobilized && (isKeyPressed(' ') || isKeyPressed('j')) && attackCooldown <= 0 && player.alive && weaponDef && weaponInstance) {
+  if (!immobilized && isMouseButtonDown(0) && attackCooldown <= 0 && player.alive && weaponDef && weaponInstance) {
     const durability = weaponInstance.durability ?? 0;
     const attack = createAttack(player, weaponDef, durability, strBonus);
     attacks.push(attack);
@@ -237,14 +237,20 @@ export function updateCombat(state: GameState, dt: number): void {
             maxTimer: 800,
           });
 
-          // Player melee hit effect (only player attacks, not dog; only if enemy survived)
-          if (!isDogAttack && enemy.health > 0 && enemy.def.onPlayerMeleeHit) {
+          // Player melee hit effect (only player attacks, not dog).
+          // Fires when the enemy survives, or always if alwaysTriggers is set.
+          if (!isDogAttack && enemy.def.onPlayerMeleeHit) {
             const eff = enemy.def.onPlayerMeleeHit;
-            if (Math.random() < eff.chance) {
+            if ((enemy.health > 0 || eff.alwaysTriggers) && Math.random() < eff.chance) {
               applyStatusEffect(state, eff.type, eff.duration, eff.magnitude ?? 0);
               if (eff.type === StatusEffectType.PARALYZED) {
                 state.messages.push({
                   text: `The ${enemy.def.name}'s gaze paralyzes you!`,
+                  timer: 5000,
+                });
+              } else if (eff.type === StatusEffectType.BLINDED) {
+                state.messages.push({
+                  text: `The ${enemy.def.name} bursts brilliantly as it dies — you are blinded!`,
                   timer: 5000,
                 });
               }
@@ -257,6 +263,19 @@ export function updateCombat(state: GameState, dt: number): void {
               text: isDogAttack ? narrativeDogKill(enemy.def.name) : narrativeKill(enemy.def.name),
               timer: 5000,
             });
+
+            // Roll loot drops
+            for (const drop of enemy.def.drops ?? []) {
+              if (Math.random() < drop.chance) {
+                const def = getItemDef(drop.itemId);
+                const durability = def.category === 'weapon' ? (def as WeaponDef).maxDurability : undefined;
+                state.groundItems.push({
+                  x: enemy.x + enemy.width / 2,
+                  y: enemy.y + enemy.height / 2,
+                  item: createItemInstance(drop.itemId, durability),
+                });
+              }
+            }
 
             if (wasPeaceful) {
               // No XP for killing peaceful creatures
@@ -441,45 +460,23 @@ export function updateCombat(state: GameState, dt: number): void {
 }
 
 function createAttack(source: Entity, weaponDef: WeaponDef, durability: number, damageBonus: number = 0): Attack {
-  let x = source.x;
-  let y = source.y;
-  let w = 16;
-  let h = 16;
-
   const durabilityMult = durability > 0 ? 1 : 0.5;
 
-  switch (source.facing) {
-    case Direction.NORTH:
-      x = source.x + source.width / 2 - 8;
-      y = source.y - weaponDef.range;
-      w = 16;
-      h = weaponDef.range;
-      break;
-    case Direction.SOUTH:
-      x = source.x + source.width / 2 - 8;
-      y = source.y + source.height;
-      w = 16;
-      h = weaponDef.range;
-      break;
-    case Direction.WEST:
-      x = source.x - weaponDef.range;
-      y = source.y + source.height / 2 - 8;
-      w = weaponDef.range;
-      h = 16;
-      break;
-    case Direction.EAST:
-      x = source.x + source.width;
-      y = source.y + source.height / 2 - 8;
-      w = weaponDef.range;
-      h = 16;
-      break;
-  }
+  // Place a square hitbox in the aim direction, starting at the entity's edge
+  const srcCx = source.x + source.width / 2;
+  const srcCy = source.y + source.height / 2;
+  const aimCos = Math.cos(source.aimAngle);
+  const aimSin = Math.sin(source.aimAngle);
+  const hitSize = 24;
+  const offset = source.width / 2 + weaponDef.range / 2;
+  const x = srcCx + aimCos * offset - hitSize / 2;
+  const y = srcCy + aimSin * offset - hitSize / 2;
 
   return {
     x,
     y,
-    width: w,
-    height: h,
+    width: hitSize,
+    height: hitSize,
     damageType: weaponDef.damageType,
     damage: Math.max(1, Math.round((weaponDef.baseDamage + damageBonus) * durabilityMult)),
     sourceId: source.id,

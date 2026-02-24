@@ -82,5 +82,5 @@ export const PAL = {
   messageText: '#aaaacc',
   narrativeText: '#d4c8a8',
   damageText: '#ff5555',
-  peacefulIndicator: '#44ccdd',
+  peacefulIndicator: '#44ff88',
 } as const;

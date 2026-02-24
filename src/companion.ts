@@ -8,7 +8,9 @@ import {
   GameState,
   TileMap,
   TILE_SIZE,
+  StatusEffectType,
 } from './types';
+import { PIT_ESCAPE_INTERVAL } from './config';
 import { getNextId } from './game';
 import { moveToward } from './enemy';
 import { createAnimationState, triggerWeaponSwing } from './animation';
@@ -58,6 +60,7 @@ export function createDog(playerX: number, playerY: number): CompanionEntity {
     knockbackVy: 0,
     weight: form.weight,
     facing: Direction.SOUTH,
+    aimAngle: 0,
     health: form.health,
     maxHealth: form.health,
     color: form.color,
@@ -77,6 +80,7 @@ export function createDog(playerX: number, playerY: number): CompanionEntity {
     speed: form.speed,
     biteDamage: form.biteDamage,
     biteCooldown: form.biteCooldown,
+    statusEffects: [],
   };
 }
 
@@ -112,6 +116,39 @@ export function updateDog(
 
   dog.attackCooldown = Math.max(0, dog.attackCooldown - dt * 1000);
   dog.lastHitTimer = Math.max(0, dog.lastHitTimer - dt * 1000);
+
+  // ── Tick dog status effects ──────────────────────────────
+  const dtMs = dt * 1000;
+  for (let i = dog.statusEffects.length - 1; i >= 0; i--) {
+    const eff = dog.statusEffects[i]!;
+    if (eff.type === StatusEffectType.IN_PIT) {
+      eff.pitEscapeTimer -= dtMs;
+      if (eff.pitEscapeTimer <= 0) {
+        eff.pitEscapeTimer = PIT_ESCAPE_INTERVAL;
+        if (Math.random() < 0.4) { // dogs are athletic — good escape odds
+          dog.statusEffects.splice(i, 1);
+          const name = getDogName(dog);
+          state.messages.push({ text: `Your ${name} scrambles out of the pit.`, timer: 4000 });
+        }
+      }
+      continue;
+    }
+    eff.duration -= dtMs;
+    if (eff.duration <= 0) {
+      const name = getDogName(dog);
+      if (eff.type === StatusEffectType.PARALYZED) {
+        state.messages.push({ text: `Your ${name} shakes off the drowsiness and gets back up.`, timer: 4000 });
+      }
+      dog.statusEffects.splice(i, 1);
+    }
+  }
+
+  // Paralyzed or stuck in pit — can't act
+  if (dog.statusEffects.some(e =>
+    e.type === StatusEffectType.PARALYZED || e.type === StatusEffectType.IN_PIT,
+  )) {
+    return;
+  }
 
   // Health regen: starts after a delay without damage, ticks slowly
   if (dog.lastHitTimer <= 0 && dog.health < dog.maxHealth) {

@@ -40,6 +40,7 @@ export interface Entity {
   knockbackVy: number;
   weight: number;
   facing: Direction;
+  aimAngle: number;  // free-angle aim in radians (0=East); driven by mouse for player
   health: number;
   maxHealth: number;
   color: string;
@@ -119,6 +120,8 @@ export interface CompanionEntity extends Entity {
   speed: number;
   biteDamage: number;
   biteCooldown: number;
+  // Active status effects (paralysis, pit, etc.)
+  statusEffects: StatusEffect[];
 }
 
 // ── Dungeon Generation ────────────────────────────────────

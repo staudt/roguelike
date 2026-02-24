@@ -33,8 +33,17 @@ export function spawnEnemies(dungeon: DungeonResult, _playerId: number, floor: n
       const def = pickWeightedMonster(eligible);
       if (!def) continue;
 
-      const ex = (room.x + 1 + Math.floor(Math.random() * (room.w - 2))) * TILE_SIZE + 4;
-      const ey = (room.y + 1 + Math.floor(Math.random() * (room.h - 2))) * TILE_SIZE + 4;
+      // Try up to 10 positions — required for caves where room rects contain walls
+      let tx = -1, ty = -1;
+      for (let attempt = 0; attempt < 10; attempt++) {
+        const cx = room.x + 1 + Math.floor(Math.random() * Math.max(1, room.w - 2));
+        const cy = room.y + 1 + Math.floor(Math.random() * Math.max(1, room.h - 2));
+        if (isWalkable(dungeon.tiles, cx, cy)) { tx = cx; ty = cy; break; }
+      }
+      if (tx === -1) continue; // no walkable tile found in this room
+
+      const ex = tx * TILE_SIZE + 4;
+      const ey = ty * TILE_SIZE + 4;
 
       enemies.push({
         id: getNextId(),
@@ -48,6 +57,7 @@ export function spawnEnemies(dungeon: DungeonResult, _playerId: number, floor: n
         knockbackVy: 0,
         weight: def.weight,
         facing: Direction.SOUTH,
+        aimAngle: 0,
         health: def.health,
         maxHealth: def.health,
         color: def.color,

@@ -43,8 +43,10 @@ export interface MonsterDef {
   // Special attacks / abilities
   abilities?: Ability[];
 
-  // Status effect applied to PLAYER when player's melee attack connects but doesn't kill this monster
-  onPlayerMeleeHit?: { type: StatusEffectType; chance: number; duration: number; magnitude?: number };
+  // Status effect applied to PLAYER when player's melee attack connects.
+  // By default only triggers if the monster survives the hit.
+  // Set alwaysTriggers: true to also fire on the killing blow.
+  onPlayerMeleeHit?: { type: StatusEffectType; chance: number; duration: number; magnitude?: number; alwaysTriggers?: boolean };
 
   // Status effect applied to PLAYER when this monster deals contact damage
   onPlayerContactHit?: { type: StatusEffectType; chance: number; duration: number; magnitude?: number };

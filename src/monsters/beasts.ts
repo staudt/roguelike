@@ -27,7 +27,7 @@ export const BEAST_MONSTERS: MonsterDef[] = [
     damage: 1,
     weight: 0.1,
     vulnerabilities: {},
-    tags: [...TINY_BEAST, AI_CHASE, RARITY_COMMON],
+    tags: [...TINY_BEAST, AI_CHASE, RARITY_COMMON, 'branch:main'],
     props: {
       contactCooldown: 600,
       spawnFloorMin: 1,
@@ -46,12 +46,13 @@ export const BEAST_MONSTERS: MonsterDef[] = [
     damage: 1,
     weight: 0.1,
     vulnerabilities: {},
-    tags: [...TINY_BEAST, AI_PATROL, RARITY_COMMON],
+    tags: [...TINY_BEAST, AI_PATROL, RARITY_COMMON, 'branch:main'],
     props: {
       contactCooldown: 800,
       spawnFloorMin: 1,
       spawnFloorMax: 3,
     },
+    drops: [{ itemId: 'corpse_newt', chance: 0.60 }],
   },
 
   // ── Jackal ────────────────────────────────────────────
@@ -65,7 +66,7 @@ export const BEAST_MONSTERS: MonsterDef[] = [
     damage: 2,
     weight: 0.4,
     vulnerabilities: {},
-    tags: [...SMALL_BEAST, AI_CHASE, RARITY_COMMON, PACK_SPAWN, KEEN_HEARING],
+    tags: [...SMALL_BEAST, AI_CHASE, RARITY_COMMON, PACK_SPAWN, KEEN_HEARING, 'branch:main'],
     props: {
       contactCooldown: 700,
       spawnFloorMin: 1,
@@ -73,6 +74,7 @@ export const BEAST_MONSTERS: MonsterDef[] = [
       groupSizeMin: 2,
       groupSizeMax: 4,
     },
+    drops: [{ itemId: 'corpse_jackal', chance: 0.80 }],
   },
 
   // ── Sewer Rat ─────────────────────────────────────────
@@ -85,7 +87,7 @@ export const BEAST_MONSTERS: MonsterDef[] = [
     damage: 2,
     weight: 0.3,
     vulnerabilities: {},
-    tags: [...SMALL_BEAST, AI_CHASE, RARITY_COMMON, PACK_SPAWN],
+    tags: [...SMALL_BEAST, AI_CHASE, RARITY_COMMON, PACK_SPAWN, 'branch:main'],
     props: {
       contactCooldown: 600,
       spawnFloorMin: 1,
@@ -93,6 +95,7 @@ export const BEAST_MONSTERS: MonsterDef[] = [
       groupSizeMin: 2,
       groupSizeMax: 4,
     },
+    drops: [{ itemId: 'corpse_sewer_rat', chance: 0.75 }],
   },
 
   // ── Giant Rat ─────────────────────────────────────────
@@ -111,6 +114,7 @@ export const BEAST_MONSTERS: MonsterDef[] = [
       spawnFloorMin: 2,
       spawnFloorMax: 7,
     },
+    drops: [{ itemId: 'corpse_giant_rat', chance: 0.80 }],
   },
 
   // ── Bat ───────────────────────────────────────────────
@@ -154,6 +158,7 @@ export const BEAST_MONSTERS: MonsterDef[] = [
       spawnFloorMin: 3,
       spawnFloorMax: 12,
     },
+    drops: [{ itemId: 'corpse_giant_bat', chance: 0.65 }],
   },
 
   // ── Wolf ──────────────────────────────────────────────
@@ -175,6 +180,7 @@ export const BEAST_MONSTERS: MonsterDef[] = [
       groupSizeMin: 2,
       groupSizeMax: 3,
     },
+    drops: [{ itemId: 'corpse_wolf', chance: 0.90 }],
   },
 
   // ── Cave Spider ───────────────────────────────────────
@@ -197,6 +203,7 @@ export const BEAST_MONSTERS: MonsterDef[] = [
       spawnFloorMin: 1,
       spawnFloorMax: 8,
     },
+    drops: [{ itemId: 'corpse_cave_spider', chance: 0.65 }],
   },
 
   // ── Snake ─────────────────────────────────────────────
@@ -217,6 +224,7 @@ export const BEAST_MONSTERS: MonsterDef[] = [
       spawnFloorMin: 2,
       spawnFloorMax: 8,
     },
+    drops: [{ itemId: 'corpse_snake', chance: 0.80 }],
   },
 
   // ── Pit Viper ─────────────────────────────────────────
@@ -243,5 +251,6 @@ export const BEAST_MONSTERS: MonsterDef[] = [
       duration: 10000,
       magnitude: 2,
     },
+    drops: [{ itemId: 'corpse_pit_viper', chance: 0.80 }],
   },
 ];

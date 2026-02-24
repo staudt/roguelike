@@ -26,7 +26,7 @@ export const HUMANOID_MONSTERS: MonsterDef[] = [
     weight: 0.4,
     vulnerabilities: {},
     tags: [...SMALL_HUMANOID, SENTIENT, CAN_HEAR, ALIGN_CHAOTIC,
-      AI_CHASE, AI_FLEE_WHEN_HURT, RARITY_COMMON, PACK_SPAWN],
+      AI_CHASE, AI_FLEE_WHEN_HURT, RARITY_COMMON, PACK_SPAWN, 'branch:main'],
     props: {
       contactCooldown: 700,
       spawnFloorMin: 1,
@@ -35,6 +35,10 @@ export const HUMANOID_MONSTERS: MonsterDef[] = [
       groupSizeMin: 2,
       groupSizeMax: 4,
     },
+    drops: [
+      { itemId: 'rusty_sword',   chance: 0.15 },
+      { itemId: 'corpse_kobold', chance: 0.75 },
+    ],
   },
 
   // ── Large Kobold ──────────────────────────────────────
@@ -48,13 +52,17 @@ export const HUMANOID_MONSTERS: MonsterDef[] = [
     weight: 0.6,
     vulnerabilities: {},
     tags: [...HUMANOID_TAGS, SENTIENT, CAN_HEAR, ALIGN_CHAOTIC,
-      AI_CHASE, AI_FLEE_WHEN_HURT, RARITY_UNCOMMON],
+      AI_CHASE, AI_FLEE_WHEN_HURT, RARITY_UNCOMMON, 'branch:main'],
     props: {
       contactCooldown: 800,
       spawnFloorMin: 3,
       spawnFloorMax: 8,
       fleeThreshold: 0.2,
     },
+    drops: [
+      { itemId: 'rusty_sword',         chance: 0.20 },
+      { itemId: 'corpse_large_kobold', chance: 0.75 },
+    ],
   },
 
   // ── Gnome ─────────────────────────────────────────────
@@ -76,6 +84,10 @@ export const HUMANOID_MONSTERS: MonsterDef[] = [
       spawnFloorMin: 1,
       spawnFloorMax: 10,
     },
+    drops: [
+      { itemId: 'wooden_club',   chance: 0.20 },
+      { itemId: 'corpse_gnome',  chance: 0.80 },
+    ],
   },
 
   // ── Gnome Lord ────────────────────────────────────────
@@ -95,6 +107,10 @@ export const HUMANOID_MONSTERS: MonsterDef[] = [
       spawnFloorMin: 3,
       spawnFloorMax: 12,
     },
+    drops: [
+      { itemId: 'short_sword',       chance: 0.25 },
+      { itemId: 'corpse_gnome_lord', chance: 0.80 },
+    ],
   },
 
   // ── Orc ───────────────────────────────────────────────
@@ -109,7 +125,7 @@ export const HUMANOID_MONSTERS: MonsterDef[] = [
     weight: 1.0,
     vulnerabilities: {},
     tags: [...HUMANOID_TAGS, SENTIENT, CAN_HEAR, CAN_USE_WEAPONS, ALIGN_CHAOTIC,
-      AI_CHASE, RARITY_COMMON, PACK_SPAWN],
+      AI_CHASE, RARITY_COMMON, PACK_SPAWN, 'branch:main'],
     props: {
       contactCooldown: 900,
       spawnFloorMin: 4,
@@ -117,6 +133,10 @@ export const HUMANOID_MONSTERS: MonsterDef[] = [
       groupSizeMin: 2,
       groupSizeMax: 3,
     },
+    drops: [
+      { itemId: 'rusty_sword', chance: 0.25 },
+      { itemId: 'corpse_orc',  chance: 0.80 },
+    ],
   },
 
   // ── Hill Orc ──────────────────────────────────────────
@@ -130,12 +150,16 @@ export const HUMANOID_MONSTERS: MonsterDef[] = [
     weight: 1.2,
     vulnerabilities: {},
     tags: [...HUMANOID_TAGS, SENTIENT, CAN_HEAR, CAN_USE_WEAPONS, ALIGN_CHAOTIC,
-      AI_CHASE, RARITY_UNCOMMON],
+      AI_CHASE, RARITY_UNCOMMON, 'branch:main'],
     props: {
       contactCooldown: 1000,
       spawnFloorMin: 6,
       spawnFloorMax: 15,
     },
+    drops: [
+      { itemId: 'iron_spear',     chance: 0.25 },
+      { itemId: 'corpse_hill_orc',chance: 0.80 },
+    ],
   },
 
   // ── Orc Captain ───────────────────────────────────────
@@ -149,13 +173,17 @@ export const HUMANOID_MONSTERS: MonsterDef[] = [
     weight: 1.4,
     vulnerabilities: {},
     tags: [...HUMANOID_TAGS, SENTIENT, CAN_HEAR, CAN_USE_WEAPONS, ALIGN_CHAOTIC,
-      AI_CHASE, AI_BERSERKER, RARITY_RARE],
+      AI_CHASE, AI_BERSERKER, RARITY_RARE, 'branch:main'],
     props: {
       contactCooldown: 900,
       spawnFloorMin: 8,
       spawnFloorMax: 18,
       berserkerThreshold: 0.35,
     },
+    drops: [
+      { itemId: 'short_sword',          chance: 0.35 },
+      { itemId: 'corpse_orc_captain',   chance: 0.85 },
+    ],
   },
 
   // ── Dwarf ─────────────────────────────────────────────
@@ -176,6 +204,10 @@ export const HUMANOID_MONSTERS: MonsterDef[] = [
       spawnFloorMin: 3,
       spawnFloorMax: 12,
     },
+    drops: [
+      { itemId: 'war_hammer',    chance: 0.25 },
+      { itemId: 'corpse_dwarf',  chance: 0.80 },
+    ],
   },
 
   // ── Hobgoblin ─────────────────────────────────────────
@@ -190,12 +222,16 @@ export const HUMANOID_MONSTERS: MonsterDef[] = [
     weight: 0.9,
     vulnerabilities: {},
     tags: [...HUMANOID_TAGS, SENTIENT, CAN_HEAR, ALIGN_CHAOTIC,
-      AI_CHASE, RARITY_COMMON],
+      AI_CHASE, RARITY_COMMON, 'branch:main'],
     props: {
       contactCooldown: 800,
       spawnFloorMin: 3,
       spawnFloorMax: 10,
     },
+    drops: [
+      { itemId: 'wooden_club',       chance: 0.20 },
+      { itemId: 'corpse_hobgoblin',  chance: 0.80 },
+    ],
   },
 
   // ── Bugbear ───────────────────────────────────────────
@@ -211,11 +247,15 @@ export const HUMANOID_MONSTERS: MonsterDef[] = [
     vulnerabilities: {},
     tags: [HUMANOID, HAS_HEAD, HAS_HANDS, HAS_LEGS, CAN_OPEN_DOORS, SIZE_LARGE,
       SENTIENT, CAN_HEAR, ALIGN_CHAOTIC,
-      AI_CHASE, RARITY_UNCOMMON],
+      AI_CHASE, RARITY_UNCOMMON, 'branch:main'],
     props: {
       contactCooldown: 1000,
       spawnFloorMin: 5,
       spawnFloorMax: 14,
     },
+    drops: [
+      { itemId: 'wooden_club',     chance: 0.20 },
+      { itemId: 'corpse_bugbear',  chance: 0.85 },
+    ],
   },
 ];

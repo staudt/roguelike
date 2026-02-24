@@ -15,12 +15,13 @@ npm run dev
 - **Space / J** — Attack (in facing direction)
 - **. or >** — Descend stairs (when standing on down stairs)
 - **, or <** — Ascend stairs (when standing on up stairs)
+- **E** — Pick up item on current tile
 - **R** — Restart (after death, returns to role selection)
 
 ## Tech Stack
 - Vite + TypeScript
 - HTML5 Canvas (no frameworks)
-- 32x32 tile size, colored rectangles for sprites
+- 32x32 tile size, NetHack tile atlas for entities/items/terrain
 
 ## Architecture
 
@@ -56,9 +57,12 @@ npm run dev
 | `progression.ts` | Difficulty, XP, level thresholds, spawn eligibility, monster/pet leveling |
 | `enemy.ts` | Monster spawning (from registry, rarity-weighted), movement helpers |
 | `entities.ts` | Update orchestration for all entities |
-| `items/defs.ts` | `ItemDef`, `WeaponDef`, `ArmorDef`, `ConsumableDef`, `ItemInstance` interfaces |
+| `items/defs.ts` | `ItemDef`, `WeaponDef`, `ArmorDef`, `ConsumableDef`, `ItemInstance` interfaces; `ItemCategory` includes `'corpse'` |
 | `items/weapons.ts` | Weapon definitions (rusty_sword, wooden_club, iron_spear, short_sword, war_hammer) |
-| `items/index.ts` | Item registry (`getItemDef()`, `getWeaponDef()`, `getAllItems()`) |
+| `items/corpses.ts` | Corpse item definitions (one per droppable monster, id = `corpse_<monsterDefId>`) |
+| `items/index.ts` | Item registry (`getItemDef()`, `getWeaponDef()`, `getAllItems()`, `getAllWeapons()`) |
+| `tiles/atlas.ts` | Loads `public/tiles/*.txt`, builds `OffscreenCanvas` atlas; `drawTile(ctx, atlas, name, x, y, w, h)` |
+| `tiles/mapping.ts` | String-name tile mappings: `MONSTER_TILE_NAMES`, `WEAPON_TILE_NAMES`, `TERRAIN_TILE_NAMES`, `CORPSE_TILE_NAME`, `CATEGORY_TILE_NAMES`, `TRAP_TILE_NAMES` |
 | `inventory.ts` | `Inventory` interface, equipment slots, add/remove/equip helpers |
 | `combat.ts` | Attack creation, hit detection, damage calc (reads weapon from inventory) |
 | `fov.ts` | 360-degree raycasting field of view |
@@ -67,7 +71,7 @@ npm run dev
 ### Dungeon Generation & Branches
 Pluggable map generators dispatched by `generateFloor(branch, floor)`:
 - **BSP** (`dungeon/bsp.ts`): Main dungeon — recursively split map, place rooms in leaves, connect with L-shaped corridors, add dead-end branches. 50x40 tiles. Stairs placed in room farthest from start. May place mines entrance on floors 2-5
-- **Caves** (`dungeon/caves.ts`): Gnomish Mines — cellular automata (55% open, 4 smoothing steps), flood-fill to keep largest region, find cavern pseudo-rooms for spawning. 60x50 tiles
+- **Caves** (`dungeon/caves.ts`): Gnomish Mines — cellular automata (44% open, 5 smoothing steps, wall threshold 4), flood-fill to keep largest region, grid-cell pseudo-rooms (10×10 cells) for spawning. 60x50 tiles. Denser than main dungeon by design.
 - **Branches**: `main` (20 floors, BSP), `mines` (8 floors, caves). `DungeonProgress` tracks current branch/floor with a return stack for nested branches
 - **Floor transitions**: Player stands on stairs and presses `.` or `>` to descend. Branch entrances lead to other dungeon types with different biome palettes
 - **Biome rendering**: Per-branch tile color palettes (purple/navy for main, earthy browns for mines)
@@ -108,13 +112,29 @@ Monsters are defined as data in `src/monsters/` using an open-ended tag system. 
 - **Alignment system**: Sentient monsters with matching alignment to player spawn peaceful (cyan indicator). Attacking a peaceful creature makes it hostile. No XP for killing peacefuls. Roles define player alignment: Warrior=lawful, Ranger=neutral, Brute=chaotic
 - **Sound tags** (future): `CAN_HEAR`, `KEEN_HEARING`, `DEAF` — prepared in tags.ts. `WeaponDef.noiseRadius` set on all weapons
 
+### Tile System
+- **Source files**: `public/tiles/monsters.txt`, `objects.txt`, `other.txt` — NetHack public domain tile set, text format (16×16 palette-based)
+- **Atlas**: Built at runtime by `src/tiles/atlas.ts` into an `OffscreenCanvas`; tiles are 16×16 source pixels drawn at 32×32
+- **Lookup**: Always by **string name** — `drawTile(ctx, atlas, name, x, y, w, h)` → returns `true` if drawn, `false` if tile missing
+- **Mappings** in `src/tiles/mapping.ts`: `MONSTER_TILE_NAMES[monsterId]`, `WEAPON_TILE_NAMES[weaponId]`, `CORPSE_TILE_NAME` (single generic tile), `CATEGORY_TILE_NAMES[category]` (fallbacks)
+- **Every render call has a colored-rect fallback** if the named tile is absent
+
 ### Inventory & Equipment
-- **Item definitions** (`items/defs.ts`): Template data — `WeaponDef`, `ArmorDef`, `ConsumableDef` extend `ItemDef`
+- **Item definitions** (`items/defs.ts`): Template data — `WeaponDef`, `ArmorDef`, `ConsumableDef`, `ItemDef` (category `'corpse'`) extend `ItemDef`
 - **Item instances** (`ItemInstance`): Runtime state per item — `instanceId`, `defId`, mutable `durability`/`quantity`
 - **Item registry** (`items/index.ts`): All defs registered at load time, lookup by ID
 - **Inventory** (`inventory.ts`): Player carries items (`items[]`, `maxSlots: 20`) with equipment slots (`weapon`, `body`, `head`, `hands`, `feet`)
 - **Combat reads from inventory**: `state.inventory.equipped.weapon` → look up `WeaponDef` → create attack
 - Weapons: `rusty_sword` (SLASH), `wooden_club` (BLUNT), `iron_spear` (THRUST), `short_sword` (SLASH), `war_hammer` (BLUNT)
+
+### Loot & Ground Items
+- **`GroundItem`** (`types.ts`): `{ x, y, item: ItemInstance }` — pixel-space center of the tile
+- **`state.groundItems`**: Array of items on the current floor; persisted in `floorCache` on floor transitions
+- **Drop system** (`combat.ts`): On enemy death, rolls `MonsterDef.drops[]` — each entry is `{ itemId, chance }`. Weapons spawn with full durability; corpses have no durability
+- **Floor scatter** (`game.ts → placeFloorItems`): New floors get 1–3 random weapons placed in non-start rooms
+- **Rendering** (`renderer.ts`): Ground items drawn after traps, before enemies; uses NetHack atlas tile by category/id, falls back to colored square
+- **Pickup** (`main.ts`): Press **E** on same tile — uses `addItem(inventory, item)`, shows message; "Your pack is full" if inventory is full (20 slots)
+- **Corpses**: `category: 'corpse'`, all use the single generic NetHack `'corpse'` tile. Flavor-only for now (no eat/sacrifice mechanic yet)
 
 ### Animation System
 Per-entity `AnimationState` stored on `Entity.anim`, updated every frame by `updateAnimation()`:
@@ -122,6 +142,18 @@ Per-entity `AnimationState` stored on `Entity.anim`, updated every frame by `upd
 - **Horizontal mirroring**: Entities flip via `ctx.scale(-1,1)` based on east/west facing
 - **Hit flash**: White overlay for 120ms when taking damage (`triggerHitFlash()`)
 - **Weapon swing**: Small rectangle rotates through a 0.6-radian arc over 150ms on attack (`triggerWeaponSwing()`)
+
+### NetHack Reference
+This project is a real-time action reimagining of NetHack. When adding monsters, items, effects, dungeon branches, or mechanics, **consult the NetHack source as the primary reference**:
+- **GitHub**: [https://github.com/NetHack/NetHack](https://github.com/NetHack/NetHack) — browse `src/` for monster stats (`monst.c`), object definitions (`objects.c`), and spell/effect logic
+- **NetHack wiki**: https://nethackwiki.com — human-readable descriptions of monsters, items, roles, branches, intrinsics, and game rules
+- **Key source files to reference**:
+  - `src/monst.c` — all monster definitions (MH flags, attacks, AC, speed, resistances)
+  - `src/objects.c` — all item definitions (weapons, armor, food, potions, scrolls)
+  - `include/monsym.h` + `include/monattk.h` — monster attack types and flags
+  - `src/do_name.c`, `src/makemon.c` — naming, difficulty, spawn logic
+- **Porting philosophy**: Adapt stats and flavor faithfully, but simplify mechanics to fit real-time play. NetHack's turn-based numbers won't map 1:1 — use them as a baseline for relative power and flavor, not literal values.
+- **Convention**: Update `CLAUDE.md` after each feature is shipped to keep it accurate for future sessions.
 
 ### Key Design Principles
 - **Permadeath** — no saves, death is final
@@ -132,8 +164,8 @@ Per-entity `AnimationState` stored on `Entity.anim`, updated every frame by `upd
 - **Iterative development** — build foundation, expand incrementally
 
 ## Next Steps
-- Loot drops on the ground and item pickup
 - Weapon repair mechanic
+- Corpse interactions (sacrifice, feeding dog, cooking)
 - Sound propagation system (local BFS + global floor-wide)
 - Alignment penalties (killing peacefuls shifts alignment toward chaotic)
 - Minimap

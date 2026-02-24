@@ -73,6 +73,22 @@ export const WEAPON_TILE_NAMES: Record<string, string> = {
   war_hammer:   'war hammer',
 };
 
+// ── Corpse item ID → NetHack atlas tile name ──────────────────────────────────
+// There is only one generic 'corpse' tile in the NetHack tileset (objects.txt tile 265).
+// All corpses map to it; individual monster corpses are not available.
+
+export const CORPSE_TILE_NAME = 'corpse';
+
+// ── Ground item fallback tile by ItemCategory ─────────────────────────────────
+// Used when a specific tile name isn't found for an item.
+
+export const CATEGORY_TILE_NAMES: Record<string, string> = {
+  weapon:     'weapon',     // generic weapon (objects.txt tile 2)
+  armor:      'armor',      // generic armor  (objects.txt tile 3)
+  consumable: 'food',       // generic food   (objects.txt tile 7)
+  corpse:     'corpse',     // generic corpse (objects.txt tile 265)
+};
+
 // ── Terrain types → NetHack tile name (from other.txt) ───────────────────────
 
 export const TERRAIN_TILE_NAMES: Partial<Record<TileType, string>> = {

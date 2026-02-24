@@ -11,7 +11,8 @@ import {
 } from './config';
 import { updatePlayer, canMoveTo } from './player';
 import { updateEnemies } from './enemy';
-import { updateDog } from './companion';
+import { updateDog, getDogName } from './companion';
+import type { CompanionEntity } from './types';
 import { computeFlowField } from './pathfinding';
 import { updateAnimation, triggerHitFlash } from './animation';
 import { StatusEffectType } from './status';
@@ -199,6 +200,51 @@ function updateTraps(state: GameState): void {
       triggerTrap(state, trap);
     }
   }
+
+  // ── Dog trap checks ──────────────────────────────────────
+  // Dogs are more perceptive than players: wider detect radius, faster reveal,
+  // and they try to avoid revealed traps (with a small chance to slip anyway).
+  const { dog } = state;
+  if (dog && dog.alive) {
+    const dogTileX = Math.floor((dog.x + dog.width / 2) / TILE_SIZE);
+    const dogTileY = Math.floor((dog.y + dog.height / 2) / TILE_SIZE);
+
+    for (const trap of traps) {
+      if (trap.triggered) continue;
+
+      const ddx = dogTileX - trap.tileX;
+      const ddy = dogTileY - trap.tileY;
+      const dist = Math.sqrt(ddx * ddx + ddy * ddy);
+
+      // Dog detects traps ~2 tiles further than the player, and twice as fast
+      if (!trap.revealed && dist <= TRAP_DETECT_RADIUS + 2) {
+        const detectChance = searchBonus / (searchBonus + TRAP_DETECT_CHANCE_DIV);
+        if (Math.random() < detectChance * 0.032) {
+          trap.revealed = true;
+          const name = getDogName(dog);
+          state.messages.push({ text: `Your ${name} sniffs at a hidden trap!`, timer: 4000 });
+        }
+      }
+
+      // Dog walks onto a trap tile
+      if (dogTileX === trap.tileX && dogTileY === trap.tileY) {
+        if (trap.revealed) {
+          // Dog knows about it — only a 10% fumble chance
+          if (Math.random() < 0.10) {
+            trap.triggered = true;
+            triggerTrapOnDog(state, dog, trap);
+          }
+        } else {
+          // Unrevealed — dog instinct avoids 35% of the time silently
+          if (Math.random() < 0.65) {
+            trap.triggered = true;
+            trap.revealed = true;
+            triggerTrapOnDog(state, dog, trap);
+          }
+        }
+      }
+    }
+  }
 }
 
 function triggerTrap(state: GameState, trap: Trap): void {
@@ -277,6 +323,46 @@ function triggerTrap(state: GameState, trap: Trap): void {
           tickTimer: 0,
           pitEscapeTimer: 0,
         });
+      }
+      break;
+    }
+  }
+}
+
+function triggerTrapOnDog(state: GameState, dog: CompanionEntity, trap: Trap): void {
+  const name = getDogName(dog);
+
+  switch (trap.type) {
+    case TrapType.ARROW: {
+      const dmg = 3 + Math.floor(Math.random() * 4); // 3–6
+      dog.health = Math.max(1, dog.health - dmg); // can't kill dog outright
+      triggerHitFlash(dog.anim);
+      dog.lastHitTimer = 5000;
+      dog.regenAccum = 0;
+      state.messages.push({ text: `An arrow shoots out and hits your ${name}!`, timer: 5000 });
+      state.floatingTexts.push({ x: dog.x + dog.width / 2, y: dog.y, text: `-${dmg}`, color: '#ffffff', timer: 800, maxTimer: 800 });
+      break;
+    }
+    case TrapType.PIT: {
+      const dmg = 2 + Math.floor(Math.random() * 3); // 2–4
+      dog.health = Math.max(1, dog.health - dmg);
+      triggerHitFlash(dog.anim);
+      dog.lastHitTimer = 5000;
+      dog.regenAccum = 0;
+      state.messages.push({ text: `Your ${name} tumbles into a pit!`, timer: 5000 });
+      state.floatingTexts.push({ x: dog.x + dog.width / 2, y: dog.y, text: `-${dmg}`, color: '#ffffff', timer: 800, maxTimer: 800 });
+      if (!dog.statusEffects.some(e => e.type === StatusEffectType.IN_PIT)) {
+        dog.statusEffects.push({ type: StatusEffectType.IN_PIT, duration: 0, magnitude: 0, tickTimer: 0, pitEscapeTimer: PIT_ESCAPE_INTERVAL });
+        dog.aiState = 'follow';
+      }
+      break;
+    }
+    case TrapType.SLEEP_GAS: {
+      const duration = 2000 + Math.random() * 2000; // 2–4 seconds (shorter than player)
+      state.messages.push({ text: `Your ${name} inhales sleeping gas and collapses!`, timer: 5000 });
+      if (!dog.statusEffects.some(e => e.type === StatusEffectType.PARALYZED)) {
+        dog.statusEffects.push({ type: StatusEffectType.PARALYZED, duration, magnitude: 0, tickTimer: 0, pitEscapeTimer: 0 });
+        dog.aiState = 'follow';
       }
       break;
     }
